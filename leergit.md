@@ -1,5 +1,8 @@
 para iniciar un nuevo proyecto solo se realiza una vez
 git init
+
+$ git config --global user.name "John Doe"
+$ git config --global user.email johndoe@example.com
 -----------------
 git add [nombrearchivo]    ( se puede decir de esta manera o de todos los archivos mediante)
 git add .               (marca todos los archivos para guardar)
