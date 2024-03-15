@@ -1,7 +1,7 @@
 ### para iniciar un proyecto typescript debemos instalar en modo global o en modo dev este comando
 
 npm i typescript  -g || -D (dependencia de desarrollo)
-
+npm i ts-node -g
 ## Nodemon para que se reinicie de manera autmatica al momento de realizar cambioas
 
 npm i nodemon -g || -D (dependencia de desarrollo)
