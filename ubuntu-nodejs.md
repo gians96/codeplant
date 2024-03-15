@@ -62,6 +62,9 @@ server {
         proxy_read_timeout 240s;
     }
 }
+
+
+otro 
 ## HTTPS
 
 ### cerbot
@@ -70,3 +73,7 @@ sudo snap install --classic certbot
 sudo ln -s /snap/bin/certbot /usr/bin/certbot
 sudo certbot --nginx
 
+
+
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser ​
+S
