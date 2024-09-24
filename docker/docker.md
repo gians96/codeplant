@@ -15,11 +15,11 @@ sudo apt install docker-ce
 
 sudo systemctl status docker
 
-Para permitir que tu usuario ejecute comandos Docker sin necesidad de usar sudo, añade tu usuario al grupo docker:
+## Para permitir que tu usuario ejecute comandos Docker sin necesidad de usar sudo, añade tu usuario al grupo docker:
 
 sudo usermod -aG docker $USER
 
-Reinicia tu sesión de usuario o ejecuta el siguiente comando para aplicar los cambios:
+## Reinicia tu sesión de usuario o ejecuta el siguiente comando para aplicar los cambios:
 su - $USER
 
 # Docker images
@@ -53,4 +53,16 @@ docker start scrapping_undc
 ## eliminar contenedor
 docker rm scrapping_undc
 docker rm -f scrapping_undc
+
+# UNINSTALL DOCKER
+dpkg -l | grep -i docker
+
+sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli docker-compose-plugin
+sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce docker-compose-plugin
+
+sudo rm -rf /var/lib/docker /etc/docker
+sudo rm /etc/apparmor.d/docker
+sudo groupdel docker
+sudo rm -rf /var/run/docker.sock
+sudo rm -rf /var/lib/containerd
 
