@@ -4,13 +4,15 @@ Necesitamos el script que se encuentra dentro de la carpeta, llamada `install.sh
 Creamos el archivo
 ```sh
 cd /var/
-nano install.sh
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/pro6/install.sh
+chmod +x install.sh
+
 ```
-Le damos permisos y ejecutamos.
+Aqui editamos el nombre de dominio, y ejecutamos.
 
 ```sh
-chmod +x install.sh
 ./install.sh nt-suite.pro
+
 ```
 
 ## Actualizar SSL (docker)
@@ -18,12 +20,12 @@ Necesitamos el script que se encuentra dentro de la carpeta, llamada `updateSSL.
 Creamos el archivo
 ```sh
 cd /var/
-nano updateSSL.sh
+curl -O https://github.com/gians96/codeplant/blob/master/pro6/updateSSL.sh
+chmod +x updateSSL.sh
 ```
-Le damos permisos y ejecutamos.
+Aqui editamos el nombre de dominio, y ejecutamos.
 
 ```sh
-chmod +x updateSSL.sh
 ./updateSSL.sh nt-suite.pro
 ```
 
