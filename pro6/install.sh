@@ -12,7 +12,7 @@ if [ "$HOST" = "dominio" ]; then
 fi
 
 #VERSION
-read -p "indique versión del facturador a instalar, [1] [2] [3] [4] [4-API] [5]: " version
+read -p "indique versión del facturador a instalar, [1] [2] [3] [4] [4-API] [5] [6]: " version
 if [ "$version" = '1' ]; then
     PROYECT='https://gitlab.com/rash07/facturadorpro1.git'
 elif [ "$version" = '2' ]; then
@@ -20,12 +20,13 @@ elif [ "$version" = '2' ]; then
 elif [ "$version" = '3' ]; then
     PROYECT='https://gitlab.com/b.mendoza/facturadorpro3.git'
 elif [ "$version" = '4' ]; then
-    PROYECT='https://gitlab.com/carlomagno83/facturadorpro4.git'
+    PROYECT='https://github.com/gians96/NT-facturacion.git'
 elif [ "$version" = '4-API' ]; then
     PROYECT='https://gitlab.com/facturaloperu/facturador/pro4-apirest.git'
 elif [ "$version" = '5' ]; then
+    PROYECT='https://gitlab.com/gians96/pro5.git'
+elif [ "$version" = '6' ]; then
     PROYECT='https://gitlab.com/gians96/pro-6.git'
-
 else
     echo no ha ingresado una version correcta del facturador
     exit 1
@@ -35,7 +36,8 @@ fi
 PATH_INSTALL=$(echo $PWD)
 #NOMBRE DE CARPETA
 #DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER
-DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER-$HOST
+#DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER-$HOST
+DIR=$HOST 
 
 #DATOS DE ACCESO MYSQL
 MYSQL_USER=$(echo $DIR)
@@ -107,13 +109,13 @@ rm -rf "$PATH_INSTALL/$DIR"
 git clone "$PROYECT" "$PATH_INSTALL/$DIR"
 
 cd $HOST
+
+if [ "$version" = '5' ] || [ "$version" = '6' ]; then
 git fetch --all
 # Cambiar a la rama gians96
 echo "Cambiando a la rama $BRANCH..."
 git checkout $BRANCH
 git pull origin $BRANCH
-
-if [ "$version" = '5' ]; then
 cp $PATH_INSTALL/$DIR/supervisor.conf.example $PATH_INSTALL/$DIR/supervisor.conf
 fi
 
@@ -319,7 +321,7 @@ docker-compose exec -T supervisor$SERVICE_NUMBER supervisorctl start all
 
 
 #CONFIGURAR CLAVE SSH
-if [ "$version" = '3' ] || [ "$version" = '4' ] || [ "$version" = '4-API' ] || [ "$version" = '5' ]; then
+if [ "$version" = '3' ] || [ "$version" = '4' ] || [ "$version" = '4-API' ] || [ "$version" = '5' ] || [ "$version" = '6' ]; then
     read -p "configurar clave SSH para actualización automática? (requiere acceso a https://gitlab.com/profile/keys). si[s] no[n] " ssh
     if [ "$ssh" = "s" ]; then
 
