@@ -24,7 +24,7 @@ elif [ "$version" = '4' ]; then
 elif [ "$version" = '4-API' ]; then
     PROYECT='https://gitlab.com/facturaloperu/facturador/pro4-apirest.git'
 elif [ "$version" = '5' ]; then
-    PROYECT='https://gitlab.com/awsperutic/pro63.git'
+    PROYECT='https://gitlab.com/gians96/pro-6.git'
 
 else
     echo no ha ingresado una version correcta del facturador
@@ -34,7 +34,9 @@ fi
 #RUTA DE INSTALACION (RUTA ACTUAL DEL SCRIPT)
 PATH_INSTALL=$(echo $PWD)
 #NOMBRE DE CARPETA
-DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER
+#DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER
+DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER-$HOST
+
 #DATOS DE ACCESO MYSQL
 MYSQL_USER=$(echo $DIR)
 MYSQL_PASSWORD=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20 ; echo '')
@@ -104,7 +106,7 @@ echo "Cloning the repository"
 rm -rf "$PATH_INSTALL/$DIR"
 git clone "$PROYECT" "$PATH_INSTALL/$DIR"
 
-cd pro63
+cd $HOST
 git fetch --all
 # Cambiar a la rama gians96
 echo "Cambiando a la rama $BRANCH..."
