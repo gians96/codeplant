@@ -35,9 +35,9 @@ fi
 #RUTA DE INSTALACION (RUTA ACTUAL DEL SCRIPT)
 PATH_INSTALL=$(echo $PWD)
 #NOMBRE DE CARPETA
-#DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER
+DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER
 #DIR=$(echo $PROYECT | rev | cut -d'/' -f1 | rev | cut -d '.' -f1)$SERVICE_NUMBER-$HOST
-DIR=$HOST 
+#DIR=$HOST 
 
 #DATOS DE ACCESO MYSQL
 MYSQL_USER=$(echo $DIR)
@@ -108,7 +108,7 @@ echo "Cloning the repository"
 rm -rf "$PATH_INSTALL/$DIR"
 git clone "$PROYECT" "$PATH_INSTALL/$DIR"
 
-cd $HOST
+cd $PATH_INSTALL/$DIR
 
 if [ "$version" = '5' ] || [ "$version" = '6' ]; then
 git fetch --all
