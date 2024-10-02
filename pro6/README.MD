@@ -14,7 +14,7 @@ Aqui editamos el nombre de dominio, y ejecutamos.
 ./install.sh nt-suite.pro
 
 ```
-```
+
 Para agregar otro proyecto con otro subdominio agregar los siguientes parametros, el 2 significa que es el numero de proyecto, y el 3307 es el puerto de la base de datos.
 
 ```sh
