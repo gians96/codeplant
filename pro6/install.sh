@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#Funciona solo en ubuntu 20.04
 #PARAMETROS
 HOST=${1:-'dominio'}
 SERVICE_NUMBER=${2:-'1'}

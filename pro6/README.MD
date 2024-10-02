@@ -1,4 +1,4 @@
-# PRO 6 - COMANDOS DOCKER
+# PRO 6 - COMANDOS DOCKER - (ubuntu 20.04)
 ## Instalar el PRO 6 (docker)
 Necesitamos el script que se encuentra dentro de la carpeta, llamada `install.sh`, lo copiamos y guardamos en el vps en lo siguiente:
 Creamos el archivo
@@ -14,6 +14,14 @@ Aqui editamos el nombre de dominio, y ejecutamos.
 ./install.sh nt-suite.pro
 
 ```
+```
+Para agregar otro proyecto con otro subdominio agregar los siguientes parametros, el 2 significa que es el numero de proyecto, y el 3307 es el puerto de la base de datos.
+
+```sh
+./install.sh nt-suite.pro 2 3307
+
+```
+
 
 ## Actualizar SSL (docker)
 Necesitamos el script que se encuentra dentro de la carpeta, llamada `updateSSL.sh`, lo copiamos y guardamos en el vps en lo siguiente:
