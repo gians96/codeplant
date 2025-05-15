@@ -1,7 +1,7 @@
 
 # Configuración de una aplicacion y despliegue
 
-Para crear una aplicacion, vamos a la ruta de https://domain.com/project y escogemos el proyecto que queremos desplegar, luego vamos a la pestaña "Apps" y pulsamos en "New App".
+Para crear una aplicacion, vamos a la ruta de `https://domain.com/project` y escogemos el proyecto que queremos desplegar, luego vamos a la pestaña **"Apps"** y pulsamos en **"New App"**. Para
 Escogemos de nuestro repositorio de github la opcion
 
 Tenemos la opcion de un github privado o publico, para aplicaciones de:
@@ -14,29 +14,29 @@ Tenemos la opcion de un github privado o publico, para aplicaciones de:
 
 ### General
 
-1. Name*:        App web SIJE
-2. Build Pack*:  Nixpacks
-3. Domains*:     https://[app].coolify.com/ (ponemos el https:// para forzar el ssl y el subdominio)
-4. Direction:    Podemos escoger opcion para redirect a www o no
+1. **Name(*):**&emsp;&emsp;&emsp;Nombre de la aplicacion 
+2. **Build Pack(*):**&emsp;Nixpacks
+3. **Domains(*):**  &emsp;   `https://[app].coolify.com/` (ponemos el https:// para forzar el ssl y el subdominio)
+4. **Direction:**&emsp;&emsp;Podemos escoger opcion para redirect a www o no
 
 ### Docker Registry
 ###### no informations 
 
 ### Build
 
-1. Install Command: si modificas esto, usas el nixpacks
+1. **Install Command:** si modificas esto, usas el nixpacks
 
-```	
+```	bash
 npm install
 ```
 
-2. Build Command: Hace el Build de la aplicacion
-```	
+2. **Build Command:** Hace el Build de la aplicacion
+```	bash
 npm run build
 ```
 
-3. Start Command: Ejecuta la aplicacion
-```	
+3. **Start Command:** Ejecuta la aplicacion
+```	bash
 node .output/server/index.mjs
 ```
 
@@ -46,28 +46,28 @@ node .output/server/index.mjs
 
 ### General
 
-1. Name*:        API SIJE
-2. Build Pack*:  Nixpacks
-3. Domains*:     `https://[api-sije].coolify.com/` (ponemos el https:// para forzar el ssl y el subdominio)
-4. Direction:    Podemos escoger opcion para redirect a www o no
+1. **Name(*):**&emsp;&emsp;&emsp;API SIJE
+2. **Build Pack(*):**&emsp;Nixpacks
+3. **Domains(*):**&emsp;&emsp;`https://[api-sije].coolify.com/` (ponemos el https:// para forzar el ssl y el subdominio)
+4. **Direction:**&emsp;&emsp;Podemos escoger opcion para redirect a www o no
 
 ### Docker Registry
-###### no informations 
+###### *no information*
 
 ### Build
 
-1. Install Command: si modificas esto, usas el nixpacks
+1. **Install Command:** si modificas esto, usas el nixpacks
 
-```	
+```	bash
 npm install
 ```
 
-2. Build Command: Hace el Build de la aplicacion
-```	
+2. **Build Command:** Hace el Build de la aplicacion
+```	bash
 npx prisma migrate deploy && npx prisma generate && npm run build
 ```
 
-3. Start Command: Ejecuta la aplicacion
-```	
+3. **Start Command:** Ejecuta la aplicacion
+```	bash
 node ./dist/app.js
 ```
