@@ -40,3 +40,6 @@ python odoo-bin -r uodoo -w uodoo --addons-path=addons,modules -d bdodoo
 
 # Instalar el modulo school directamente
 python odoo-bin -r uodoo -w uodoo --addons-path=addons,modules -d bdodoo -i school
+
+Activas el modo desarrollador y actualizas los modulos
+``python odoo-bin -r uodoo -w uodoo --addons-path=addons,modules -d bdodoo --dev=reload,qweb,werkzeug,xml``
