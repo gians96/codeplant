@@ -118,3 +118,12 @@ sudo chown -R www-data:www-data [proyecto]/storage/app/tenancy/tenants/[inquilin
 sudo chown -R www-data:www-data [proyecto]/storage/app/tenancy/tenants/[inquilino]/signed/
 sudo chown -R www-data:www-data [proyecto]/storage/app/tenancy/tenants/[inquilino]/unsigned/
 ```
+## Errores comunes:
+1) Error de permiso
+```
+ Unable to retrieve the file_size for file at location: download_tray_xlsx/ventas_report_general_items_20251231140251-1.xlsx. {"userId":1,"exception":"[object] (League\Flysystem\UnableToRetrieveMetadata(code: 0): Unable to retrieve the file_size for file at location: download_tray_xlsx/ventas_report_general_items_20251231140251-1.xlsx. at /var/www/html/vendor/league/flysystem/src/UnableToRetrieveMetadata.php:49)
+```
+Comando para dar permiso necesario
+```sh
+chmod -R 777 /var/nt-suite/storage
+```
