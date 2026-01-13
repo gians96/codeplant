@@ -1,10 +1,10 @@
-# PRO 6 - COMANDOS DOCKER - (ubuntu 20.04)
-## Instalar el PRO 6 (docker)
+# FACTURADOR PRO - COMANDOS DOCKER - (ubuntu 20.04)
+## Instalar el Facturador Pro (docker)
 Necesitamos el script que se encuentra dentro de la carpeta, llamada `install.sh`, lo copiamos y guardamos en el vps en lo siguiente:
 Creamos el archivo
 ```sh
 cd /var/
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/pro6/install.sh
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install.sh
 chmod +x install.sh
 
 ```
