@@ -38,15 +38,15 @@ urlencode() {
 }
 
 # Credenciales ORIGEN
-ORIGEN_USER="gians96@gmail.com"
-ORIGEN_PASS="76251607GG#"
+ORIGEN_USER="GG"
+ORIGEN_PASS="GG#"
 ORIGEN_USER_ENC=$(urlencode "$ORIGEN_USER")
 ORIGEN_PASS_ENC=$(urlencode "$ORIGEN_PASS")
 ORIGEN="https://${ORIGEN_USER_ENC}:${ORIGEN_PASS_ENC}@git.buho.la/facturaloperu/facturador/pro8.git"
 
 # Credenciales DESTINO GITLAB
-GITLAB_USER="gians96@gmail.com"
-GITLAB_TOKEN="Gianmarcos96GG#"
+GITLAB_USER="GGcom"
+GITLAB_TOKEN="GG#"
 GITLAB_USER_ENC=$(urlencode "$GITLAB_USER")
 GITLAB_TOKEN_ENC=$(urlencode "$GITLAB_TOKEN")
 DESTINO_GITLAB="https://${GITLAB_USER_ENC}:${GITLAB_TOKEN_ENC}@gitlab.com/gians96/pro-8.git"
