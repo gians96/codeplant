@@ -33,16 +33,9 @@ echo -e "${YELLOW}[2/7]${NC} Instalando dependencias..."
 apt-get install -y python3 python3-pip tcpdump iptables-persistent net-tools > /dev/null 2>&1
 
 echo -e "${YELLOW}[3/7]${NC} Instalando mitmproxy..."
-echo "  (esto puede tardar varios minutos...)"
 
-# Intentar diferentes métodos de instalación
-if pip3 install mitmproxy --break-system-packages 2>&1 | grep -q "error\|Error"; then
-    echo "  Intentando método alternativo..."
-    if pip3 install mitmproxy 2>&1 | grep -q "error\|Error"; then
-        echo "  Instalando desde apt (versión estable)..."
-        apt-get install -y mitmproxy 2>&1 | grep -v "^Get:" | grep -v "^Fetched"
-    fi
-fi
+# Instalar desde repositorio apt (método más confiable)
+apt-get install -y mitmproxy > /dev/null 2>&1
 
 # Verificar instalación
 if ! command -v mitmproxy &> /dev/null && ! command -v mitmweb &> /dev/null; then
@@ -50,6 +43,7 @@ if ! command -v mitmproxy &> /dev/null && ! command -v mitmweb &> /dev/null; the
     echo "Instalando solo tcpdump (funcionará sin interfaz web)..."
     MITM_INSTALLED=false
 else
+    echo -e "${GREEN}✓${NC} mitmproxy instalado correctamente"
     MITM_INSTALLED=true
 fi
 

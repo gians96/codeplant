@@ -44,10 +44,10 @@ echo -e "${YELLOW}[1/2]${NC} Iniciando captura tcpdump..."
 echo "  Archivo: $OUTPUT_FILE"
 
 # Capturar directo a archivo en /tmp (siempre funciona)
-tcpdump -i any -n -l 'port 80 or port 443 or port 3000 or port 3001 or port 8080' \
+tcpdump -i any -n -l -vv 'port 22 or port 80 or port 443 or port 3000 or port 3001 or port 8080' \
     2>&1 | tee "$OUTPUT_FILE" > /dev/null &
 TCPDUMP_PID=$!
-echo $TCPDUMP_PID > /tmp/traffic-pid.txt
+echo $TCPDUMP_PID > /var/run/traffic-tcpdump.pid
 
 sleep 2
 
@@ -66,13 +66,13 @@ if [ "$MITM_AVAILABLE" = true ]; then
     nohup mitmweb \
         --mode transparent \
         --showhost \
+        --web-host 0.0.0.0 \
         --web-port 8081 \
-        --flow-detail 3 \
         --save-stream-file "$MITM_DIR/flows-$TIMESTAMP.mitm" \
         > "$LOG_DIR/mitmproxy.log" 2>&1 &
     MITM_PID=$!
     echo $MITM_PID > /var/run/traffic-mitmweb.pid
-    sleep 1
+    sleep 2
 else
     echo -e "${YELLOW}[2/2]${NC} mitmproxy no disponible (solo tcpdump)"
 fi

@@ -1,17 +1,35 @@
-# Traffic Interceptor - Monitor de Tráfico HTTP/HTTPS
+# Traffic Interceptor - Monitor de Tráfico HTTP/HTTPS/SSH
 
-Sistema completo para interceptar, capturar y analizar tráfico HTTP/HTTPS en tu servidor usando tcpdump.
+Sistema completo para interceptar, capturar y analizar tráfico HTTP/HTTPS/SSH en tu servidor usando tcpdump y mitmproxy.
 
 ## 🎯 Características
 
+### Modo Básico (tcpdump)
 - ✅ **tcpdump** - Captura todo el tráfico de red en tiempo real
-- ✅ **Monitoreo multi-puerto** - HTTP (80), HTTPS (443), Docker (3001), Apps (8080)
+- ✅ **Monitoreo multi-puerto** - SSH (22), HTTP (80), HTTPS (443), Docker (3001), Apps (8080)
 - ✅ **Análisis automático** - Reportes de dominios, puertos, conexiones
 - ✅ **Logs en texto plano** - Fácil de leer y procesar
 - ✅ **Organizado** - Todo guardado en `/var/log/traffic-interceptor`
-- 🔧 **mitmproxy** - Opcional, interfaz web (si está instalado)
+
+### Modo Avanzado (MITM con mitmproxy)
+- 🔓 **Interceptación HTTPS** - Descifra tráfico HTTPS con certificado MITM
+- 🌐 **Interfaz Web** - Vista gráfica en http://IP:8081
+- 🔍 **Captura de credenciales** - Ve usuarios, contraseñas, tokens en texto plano
+- 📊 **Análisis detallado** - Headers, body, cookies, todo visible
+- ✅ **Probado exitosamente** - Captura credenciales de Git, APIs, formularios
+
+## ⚠️ Advertencia Legal
+
+**USO EDUCATIVO ÚNICAMENTE:**
+- ✅ Solo en tu propio servidor/VPS
+- ✅ Solo para entender cómo funciona la seguridad
+- ✅ Solo con tu propio tráfico
+- ❌ **NUNCA** interceptar tráfico de terceros sin consentimiento
+- ❌ **ILEGAL** en muchos países si se usa maliciosamente
 
 ## 🚀 Instalación
+
+### Modo Básico (Solo captura)
 
 ```bash
 # 1. Dar permisos
@@ -21,44 +39,58 @@ chmod +x *.sh
 sudo ./install.sh
 ```
 
-## 📋 Uso Básico
+### Modo Avanzado (MITM completo)
 
-### Iniciar el interceptor
+```bash
+# 1. Dar permisos
+chmod +x setup-mitm-full.sh
+
+# 2. Instalar sistema completo con interceptación HTTPS
+sudo ./setup-mitm-full.sh
+
+# Esto instala: tcpdump, mitmproxy, certificado CA, scripts de control
+```
+
+## 📋 Uso
+
+### Modo Básico (Monitoreo Pasivo)
+
+#### Iniciar el interceptor
 
 ```bash
 sudo traffic-start
 ```
 
-Esto inicia tcpdump capturando en background tráfico en los puertos:
+Captura tráfico en los puertos:
+- **22** - SSH
 - **80** - HTTP
 - **443** - HTTPS  
 - **3001** - Docker/MariaDB
 - **8080** - Aplicaciones
 
-Los logs se guardan en `/var/log/traffic-interceptor/traffic-TIMESTAMP.txt`
+Logs en `/var/log/traffic-interceptor/traffic-TIMESTAMP.txt`
 
-### Ver estado
+#### Ver estado
 
 ```bash
 sudo traffic-status
 ```
 
-### Ver logs capturados
+#### Ver logs capturados
 
 ```bash
 sudo traffic-view
 ```
 
-Menú interactivo con opciones:
+Menú interactivo:
 1. Ver últimas 50 líneas
 2. Ver últimas 100 líneas
 3. Ver en tiempo real (tail -f)
 4. Buscar por texto
 5. Ver logs antiguos
 6. Limpiar logs
-7. Salir
 
-### Análisis avanzado
+#### Análisis avanzado
 
 ```bash
 sudo traffic-analyze
@@ -70,34 +102,152 @@ Genera reporte con:
 - Conexiones activas
 - Estadísticas generales
 
-### Detener
+#### Detener
 
 ```bash
 sudo traffic-stop
 ```
 
-## 🌐 Visualización en Tiempo Real
+---
 
-Puedes ver el tráfico capturado en tiempo real con:
+### Modo Avanzado (MITM - Interceptación HTTPS)
 
-```bash
-sudo tail -f /var/log/traffic-interceptor/traffic-*.txt
-```
+**Ver guía completa:** [MITM-GUIDE.md](MITM-GUIDE.md)
 
-O usando el visor interactivo:
+#### Iniciar interceptación completa
 
 ```bash
-sudo traffic-view
-# Opción 3: Ver en tiempo real
+sudo mitm-start
 ```
 
-**Nota:** Si mitmproxy está instalado, también podrás acceder a la interfaz web en `http://TU-IP:8081`
+Esto inicia:
+- ✅ tcpdump capturando tráfico raw
+- ✅ mitmproxy en modo proxy (puerto 8080)
+- ✅ mitmweb interfaz en http://IP:8081
+- ✅ Redirección automática de tráfico
 
-## 📁 Ubicación de Logs
+#### Generar tráfico de prueba
+
+```bash
+mitm-test
+```
+
+Ejecuta pruebas automáticas:
+- GET/POST HTTPS
+- Formularios con credenciales
+- Basic Authentication
+- Tokens y API keys
+- **Git clone con credenciales** (GitLab/GitHub)
+
+#### Ver capturas en interfaz web
+
+```bash
+# Abre en tu navegador:
+http://TU_IP:8081
+```
+
+Verás:
+- Lista de todos los flows HTTP/HTTPS
+- Detalles de cada request/response
+- Headers, body, cookies
+- **Credenciales en texto plano** (después de descifrar)
+
+#### Ver credenciales capturadas
+
+```bash
+# Ver flows guardados
+ls -lh /var/log/traffic-interceptor/captures/
+
+# Analizar con mitmproxy CLI
+mitmproxy -r /var/log/traffic-interceptor/captures/flows-*.mitm
+
+# Decodificar Authorization headers
+echo "BASE64_STRING" | base64 -d
+```
+
+#### Detener
+
+```bash
+sudo mitm-stop
+```
+
+## 📚 Documentación
+
+- **[README.md](README.md)** - Este archivo (guía rápida)
+- **[MITM-GUIDE.md](MITM-GUIDE.md)** - Guía completa de interceptación HTTPS
+- **[SUCCESS-CASE.md](SUCCESS-CASE.md)** - Caso real exitoso con GitLab
+- **[setup-mitm-full.sh](setup-mitm-full.sh)** - Script de instalación MITM
+
+## 🎓 Ejemplo Real Verificado
+
+**Captura exitosa de credenciales Git:**
+
+```bash
+# 1. Instalar
+sudo ./setup-mitm-full.sh
+
+# 2. Iniciar
+sudo mitm-start
+
+# 3. Ejecutar test
+mitm-test
+
+# 4. Ver en navegador
+http://TU_IP:8081
+```
+
+**Resultado:** ✅ Captura exitosa de:
+- URL: `https://gitlab.com/usuario/repo.git`
+- Usuario: `gians96`
+- Contraseña: `123456789`
+
+**Cómo:** Authorization header decodificado de Base64.
+
+Ver detalles completos en [SUCCESS-CASE.md](SUCCESS-CASE.md)
+
+## 📁 Estructura de Archivos
 
 ```
+traffic-interceptor/
+├── README.md                  # Guía rápida (este archivo)
+├── MITM-GUIDE.md             # Guía completa MITM
+├── SUCCESS-CASE.md           # Caso de éxito documentado
+├── install.sh                # Instalación básica
+├── setup-mitm-full.sh        # Instalación MITM completa
+├── start.sh                  # Script de inicio básico
+├── stop.sh                   # Script de detención
+├── status.sh                 # Ver estado
+├── view.sh                   # Ver logs
+├── analyze.sh                # Análisis de tráfico
+└── uninstall.sh             # Desinstalar
+
+Logs y capturas:
 /var/log/traffic-interceptor/
-├── traffic-YYYYMMDD-HHMMSS.txt  # Capturas de tcpdump en texto
+├── traffic-*.txt             # Logs de tcpdump (básico)
+├── captures/
+│   ├── raw-*.pcap           # Capturas tcpdump raw
+│   └── flows-*.mitm         # Flows de mitmproxy
+└── mitmproxy.log            # Log de mitmproxy
+```
+
+## 🔧 Comandos Disponibles
+
+### Modo Básico
+| Comando | Descripción |
+|---------|-------------|
+| `sudo traffic-start` | Iniciar captura básica |
+| `sudo traffic-stop` | Detener captura |
+| `sudo traffic-status` | Ver estado |
+| `sudo traffic-view` | Ver logs interactivo |
+| `sudo traffic-analyze` | Análisis de tráfico |
+
+### Modo MITM
+| Comando | Descripción |
+|---------|-------------|
+| `sudo mitm-start` | Iniciar interceptación completa |
+| `sudo mitm-stop` | Detener interceptación |
+| `mitm-test` | Generar tráfico de prueba |
+| `mitm-view` | Ver lista de capturas |
 ├── analysis/                     # Reportes de análisis
 └── *.pid                         # IDs de proceso activos
 ```
