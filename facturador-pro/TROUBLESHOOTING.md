@@ -594,3 +594,4 @@ Si el problema persiste:
 2. Ejecutar: `/var/scripts/monitor-performance.sh`
 3. Revisar logs: `/var/scripts/analyze-traffic.sh`
 4. Documentar métricas y contactar soporte técnico
+
