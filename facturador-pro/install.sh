@@ -236,7 +236,9 @@ services:
             - $PATH_INSTALL/proxy/fpms/$DIR:/etc/nginx/sites-available
         restart: always
     fpm_$SERVICE_NUMBER:
-        image: rash07/php-fpm:$VERSION_PHP_IMAGE
+        build:
+            context: ./docker/php-fpm
+            dockerfile: Dockerfile
         container_name: fpm_$DIR_MODIFIED
         working_dir: /var/www/html
         volumes:
@@ -253,6 +255,7 @@ services:
             - MYSQL_PORT_HOST=\${MYSQL_PORT_HOST}
         volumes:
             - mysqldata$SERVICE_NUMBER:/var/lib/mysql
+            - ./docker/mariadb/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
         ports:
             - "\${MYSQL_PORT_HOST}:3306"
         restart: always
@@ -264,14 +267,18 @@ services:
             - redisdata$SERVICE_NUMBER:/data
         restart: always
     scheduling_$SERVICE_NUMBER:
-        image: rash07/$SCHEDULING
+        build:
+            context: ./docker/scheduling
+            dockerfile: Dockerfile
         container_name: scheduling_$DIR_MODIFIED
         working_dir: /var/www/html
         volumes:
             - ./:/var/www/html
         restart: always
     supervisor_$SERVICE_NUMBER:
-        image: rash07/$SUPERVISOR
+        build:
+            context: ./docker/supervisor
+            dockerfile: Dockerfile
         container_name: supervisor_$DIR_MODIFIED
         working_dir: /var/www/html
         volumes:
@@ -317,8 +324,8 @@ sed -i '/APP_URL=/c\APP_URL=http://${APP_URL_BASE}' .env
 sed -i '/FORCE_HTTPS=/c\FORCE_HTTPS=false' .env
 sed -i '/APP_DEBUG=/c\APP_DEBUG=false' .env
 
-# NUEVAS CONFIGURACIONES PARA REDIS 🔴
-sed -i '/CACHE_DRIVER=/c\CACHE_DRIVER=redis' .env
+# CONFIGURACIONES DE REDIS — CACHE_DRIVER=file es CRITICO (redis_tenancy rompe CLI)
+sed -i '/CACHE_DRIVER=/c\CACHE_DRIVER=file' .env
 sed -i '/QUEUE_CONNECTION=/c\QUEUE_CONNECTION=redis' .env
 sed -i "/REDIS_HOST=/c\REDIS_HOST=$REDIS_CONTAINER_NAME" .env
 sed -i '/REDIS_PASSWORD=/c\REDIS_PASSWORD=null' .env
@@ -374,8 +381,86 @@ with open('$SEEDER_FILE', 'w', newline='\n') as f:
 "
 
 
+echo "Generando Dockerfiles con OPcache..."
+
+mkdir -p "$PATH_INSTALL/$DIR/docker/php-fpm"
+cat > "$PATH_INSTALL/$DIR/docker/php-fpm/Dockerfile" << EOFFPM
+FROM rash07/php-fpm:$VERSION_PHP_IMAGE
+RUN docker-php-ext-install opcache
+COPY opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+EOFFPM
+
+cat > "$PATH_INSTALL/$DIR/docker/php-fpm/opcache.ini" << 'EOFOC'
+[opcache]
+opcache.enable=1
+opcache.enable_cli=0
+opcache.memory_consumption=256
+opcache.interned_strings_buffer=32
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=0
+opcache.revalidate_freq=0
+opcache.save_comments=1
+opcache.fast_shutdown=1
+opcache.jit_buffer_size=128M
+opcache.jit=1255
+EOFOC
+
+mkdir -p "$PATH_INSTALL/$DIR/docker/scheduling"
+cat > "$PATH_INSTALL/$DIR/docker/scheduling/Dockerfile" << EOFSCHED
+FROM rash07/$SCHEDULING
+RUN docker-php-ext-install opcache
+COPY opcache-cli.ini /usr/local/etc/php/conf.d/opcache.ini
+EOFSCHED
+
+cat > "$PATH_INSTALL/$DIR/docker/scheduling/opcache-cli.ini" << 'EOFCLI'
+[opcache]
+opcache.enable=1
+opcache.enable_cli=1
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=0
+opcache.save_comments=1
+EOFCLI
+
+mkdir -p "$PATH_INSTALL/$DIR/docker/supervisor"
+cat > "$PATH_INSTALL/$DIR/docker/supervisor/Dockerfile" << EOFSUP
+FROM rash07/$SUPERVISOR
+RUN docker-php-ext-install opcache
+COPY opcache-cli.ini /usr/local/etc/php/conf.d/opcache.ini
+EOFSUP
+
+cat > "$PATH_INSTALL/$DIR/docker/supervisor/opcache-cli.ini" << 'EOFCLI2'
+[opcache]
+opcache.enable=1
+opcache.enable_cli=1
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=20000
+opcache.validate_timestamps=0
+opcache.save_comments=1
+EOFCLI2
+
+mkdir -p "$PATH_INSTALL/$DIR/docker/mariadb"
+cat > "$PATH_INSTALL/$DIR/docker/mariadb/my.cnf" << 'EOFMYCNF'
+[mysqld]
+innodb_buffer_pool_size         = 2G
+innodb_buffer_pool_instances    = 4
+innodb_log_file_size            = 256M
+innodb_flush_log_at_trx_commit  = 2
+max_connections                 = 200
+tmp_table_size                  = 64M
+max_heap_table_size             = 64M
+query_cache_type                = 0
+query_cache_size                = 0
+table_open_cache                = 2000
+thread_cache_size               = 16
+character-set-server            = utf8mb4
+collation-server                = utf8mb4_unicode_ci
+EOFMYCNF
+
 echo "Configurando proyecto"
-docker compose up -d
+docker compose up -d --build
 
 echo "Esperando que MariaDB esté listo..."
 for i in {1..60}; do
@@ -414,6 +499,14 @@ docker compose exec -T fpm_$SERVICE_NUMBER git config --global core.fileMode fal
 
 rm $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php
 mv $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php.bk $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php
+
+echo "Optimizando Laravel (caches + autoload)..."
+docker compose exec -T fpm_$SERVICE_NUMBER php artisan config:cache
+# IMPORTANTE: NO usar route:cache — hyn/multi-tenant necesita evaluar rutas
+# dinámicamente por hostname en cada request (if $hostname en web.php)
+docker compose exec -T fpm_$SERVICE_NUMBER php artisan route:clear
+docker compose exec -T fpm_$SERVICE_NUMBER php artisan event:cache
+docker compose exec -T fpm_$SERVICE_NUMBER sh -c "cd /var/www/html && composer dump-autoload --classmap-authoritative 2>&1" | tail -1
 
 echo "configurando permisos"
 chmod -R 777 "$PATH_INSTALL/$DIR/storage/" "$PATH_INSTALL/$DIR/bootstrap/"
