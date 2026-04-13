@@ -1,41 +1,72 @@
-# FACTURADOR PRO - COMANDOS DOCKER - (ubuntu 20.04)
-## Instalar el Facturador Pro (docker)
-Necesitamos el script que se encuentra dentro de la carpeta, llamada `install.sh`, lo copiamos y guardamos en el vps en lo siguiente:
-Creamos el archivo
+# FACTURADOR PRO-8 — Scripts de Instalación
+
+## Estructura
+
+```
+facturador-pro/
+├── install/
+│   ├── linux/                    ← Servidor Linux (VPS/dedicado)
+│   │   ├── install.sh            ← Instalador interactivo
+│   │   └── updateSSL.sh          ← Renovar certificado SSL
+│   └── windows-server/           ← Windows Server con WSL2
+│       ├── 01-setup-wsl.ps1      ← Fase 1: WSL2 + Docker (PowerShell Admin)
+│       ├── 02-install-prod.sh    ← Fase 2: Producción (proxy, SSL, multi-proyecto)
+│       ├── 02-install-dev.sh     ← Fase 2: Desarrollo (sin proxy ni SSL)
+│       └── README.md             ← Documentación detallada
+├── README.MD                     ← Este archivo
+└── TROUBLESHOOTING.md
+```
+
+---
+
+## Instalación en Linux (VPS / Servidor dedicado)
+
 ```sh
 cd /var/
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install.sh
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/install.sh
 chmod +x install.sh
-
+sudo ./install.sh
 ```
-Aqui editamos el nombre de dominio, y ejecutamos.
+
+El script pide dominio y número de servicio de forma interactiva.
+
+Para agregar otro proyecto (multi-proyecto):
 
 ```sh
-./install.sh nt-suite.pro
-
+sudo ./install.sh
+# Ingresar dominio y service number 2, 3, etc.
 ```
 
-Para agregar otro proyecto con otro subdominio agregar los siguientes parametros, el 2 significa que es el numero de proyecto, y el 3307 es el puerto de la base de datos.
+### Renovar SSL
 
-```sh
-./install.sh nt-suite.pro 2 3307
-
-```
-
-
-## Actualizar SSL (docker)
-Necesitamos el script que se encuentra dentro de la carpeta, llamada `updateSSL.sh`, lo copiamos y guardamos en el vps en lo siguiente:
-Creamos el archivo
 ```sh
 cd /var/
-curl -O https://github.com/gians96/codeplant/blob/master/pro6/updateSSL.sh
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/updateSSL.sh
 chmod +x updateSSL.sh
+./updateSSL.sh mi-dominio.com
 ```
-Aqui editamos el nombre de dominio, y ejecutamos.
 
-```sh
-./updateSSL.sh nt-suite.pro
+---
+
+## Instalación en Windows Server (WSL2)
+
+Ver documentación completa en [`install/windows-server/README.md`](install/windows-server/README.md).
+
+Resumen rápido:
+
+```powershell
+# Fase 1 — PowerShell como Administrador
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/01-setup-wsl.ps1" -OutFile "01-setup-wsl.ps1"
+powershell -ExecutionPolicy Bypass -File 01-setup-wsl.ps1
+
+# Fase 2 — Dentro de WSL
+wsl
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/02-install-prod.sh
+chmod +x 02-install-prod.sh
+sudo ./02-install-prod.sh
 ```
+
+---
 
 ## Actualización del proyecto
 
