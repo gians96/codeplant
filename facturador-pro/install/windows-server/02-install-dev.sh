@@ -69,11 +69,48 @@ echo ""
 cd "$PROJECT_DEST"
 bash scripts/local-setup.sh
 
-# ─── Append a data-config.txt si existe ──────────────────────
+# ─── Generar data-config.txt fuera del proyecto ──────────────
+DATA_CONFIG="$(dirname $PROJECT_DEST)/pro-8-dev.txt"
+cat << EOF > $DATA_CONFIG
+============================================
+DATOS DE INSTALACION (DEV) - pro-8
+Generado: $(date '+%Y-%m-%d %H:%M')
+============================================
+Ruta del proyecto: $PROJECT_DEST
+Rama: $BRANCH
+URL: http://localhost:8080
+----------------------------------------------
+Acceso remoto a MySQL
+Puerto: 3308
+Host: localhost
+Usuario: root
+Contrasena root: secret
+----------------------------------------------
+Redis
+Host: pro8_local_redis
+Puerto: 6379
+Password: null
+----------------------------------------------
+Contenedor FPM: pro8_local_fpm
+Contenedor MariaDB: pro8_local_mariadb
+Contenedor Redis: pro8_local_redis
+============================================
+
+Para entrar al proyecto:
+  wsl -d Ubuntu-24.04
+  cd $PROJECT_DEST
+
+Para levantar/reiniciar:
+  cd $PROJECT_DEST
+  docker compose -f docker-compose.local.yml up -d
+EOF
+echo "Credenciales guardadas en: $DATA_CONFIG"
+
+# Append a data-config.txt de Fase 1 si existe
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DATA_CONFIG="$SCRIPT_DIR/data-config.txt"
-if [ -f "$DATA_CONFIG" ]; then
-    cat << EOF >> $DATA_CONFIG
+PHASE1_CONFIG="$SCRIPT_DIR/data-config.txt"
+if [ -f "$PHASE1_CONFIG" ]; then
+    cat << EOF >> $PHASE1_CONFIG
 
 # ============================================
 # FASE 2 — Desarrollo
@@ -83,8 +120,9 @@ Ruta: $PROJECT_DEST
 Rama: $BRANCH
 URL: http://localhost:8080
 MySQL: localhost:3308 (root / secret)
+Credenciales completas: $DATA_CONFIG
 EOF
-    echo "data-config.txt actualizado"
+    echo "data-config.txt (Fase 1) actualizado"
 fi
 
 echo ""
@@ -95,6 +133,8 @@ echo ""
 echo "  Proyecto: $PROJECT_DEST"
 echo "  App:      http://localhost:8080"
 echo "  MySQL:    localhost:3308 (root / secret)"
+echo ""
+echo "  Credenciales: $DATA_CONFIG"
 echo ""
 echo "  Para entrar al proyecto:"
 echo "    wsl"

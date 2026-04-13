@@ -654,6 +654,7 @@ EOFMYCNF
     cat << EOF > $PATH_INSTALL/$DIR.txt
 ============================================
 DATOS DE INSTALACION - $HOST
+Generado: $(date '+%Y-%m-%d %H:%M')
 ============================================
 Ruta del proyecto: $PATH_INSTALL/$DIR
 URL: http://$HOST
@@ -677,6 +678,14 @@ Contenedor FPM: fpm_$DIR_MODIFIED
 Contenedor MariaDB: mariadb_$DIR_MODIFIED
 Contenedor Redis: $REDIS_CONTAINER_NAME
 ============================================
+
+Para entrar al proyecto:
+  wsl -d Ubuntu-24.04
+  cd $PATH_INSTALL/$DIR
+
+Para levantar/reiniciar:
+  cd $PATH_INSTALL/$DIR
+  docker compose up -d
 EOF
 
     echo ""
