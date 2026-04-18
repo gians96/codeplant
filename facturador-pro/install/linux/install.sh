@@ -220,21 +220,38 @@ server {
 }
 EOF
 
+# ─── Dockerfile para Nginx (config baked-in, sin bind mount) ──
+cat << 'EOFNGINXDF' > $PATH_INSTALL/proxy/fpms/$DIR/Dockerfile
+FROM rash07/nginx
+RUN rm -f /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+COPY default /etc/nginx/sites-available/default
+RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+EOFNGINXDF
 
 cat << EOF > $PATH_INSTALL/$DIR/docker-compose.yml
 version: '3'
 
 services:
     nginx_$SERVICE_NUMBER:
-        image: rash07/nginx
+        build:
+            context: $PATH_INSTALL/proxy/fpms/$DIR
+            dockerfile: Dockerfile
         container_name: nginx_$DIR_MODIFIED
         working_dir: /var/www/html
         environment:
             VIRTUAL_HOST: $HOST, *.$HOST
         volumes:
             - ./:/var/www/html
-            - $PATH_INSTALL/proxy/fpms/$DIR:/etc/nginx/sites-available
         restart: always
+        depends_on:
+            fpm_$SERVICE_NUMBER:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD-SHELL", "service nginx status || exit 1"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 10s
     fpm_$SERVICE_NUMBER:
         build:
             context: ./docker/php-fpm
@@ -244,6 +261,12 @@ services:
         volumes:
             - ./:/var/www/html
         restart: always
+        healthcheck:
+            test: ["CMD-SHELL", "kill -0 1 && test -S /var/run/php-fpm.sock || nc -z 127.0.0.1 9000"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 15s
     mariadb_$SERVICE_NUMBER:
         image: mariadb:10.5.6
         container_name: mariadb_$DIR_MODIFIED

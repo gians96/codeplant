@@ -145,3 +145,34 @@ docker restart $(docker ps --filter "ancestor=rash07/nginx-proxy:4.0" --format "
 | `DOMINIO.txt` | `~/proyectos/` | Credenciales del proyecto |
 | `docker-compose.yml` | `~/proyectos/DOMINIO/` | Stack de containers |
 | `.env` | `~/proyectos/DOMINIO/` | Config Laravel |
+
+## Troubleshooting
+
+### ERR_EMPTY_RESPONSE o "File not found"
+
+Si el navegador devuelve respuesta vacía o PHP dice "File not found":
+
+```bash
+# Reconstruir Nginx y PHP-FPM (config ya está dentro de la imagen)
+cd ~/proyectos/mi-empresa.com
+docker compose up -d --build --force-recreate nginx_1 fpm_1
+```
+
+> La config de Nginx está horneada dentro de la imagen (build-time), **no depende de bind mounts**. Si necesitas cambiar la config, edita `proxy/fpms/DOMINIO/default` y reconstruye con `--build`.
+
+### Docker no arranca al reiniciar Windows
+
+```bash
+wsl -d Ubuntu-24.04
+sudo service docker start
+cd ~/proyectos/mi-empresa.com && docker compose up -d
+```
+
+### Healthchecks
+
+Los servicios nginx y fpm tienen healthchecks configurados. Docker los reinicia automáticamente si fallan. Para verificar:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}"
+# Debe mostrar "(healthy)" en nginx y fpm
+```
