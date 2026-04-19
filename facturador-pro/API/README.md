@@ -115,6 +115,18 @@ Este documento describe el contrato de API para la aplicación offline del Factu
 | 19 | [Reporte de Caja](endpoints/19-cash-report.md) | `GET /api/offline/cash-report/{cashId}` |
 | 20 | [Configuración Offline](endpoints/20-configuracion-offline.md) | `GET/POST /offline-configurations/*` |
 
+### Fase 5 — Productos, Inventario y Operaciones Avanzadas
+
+| # | Documento | Endpoint / Tema |
+|---|-----------|-----------------|
+| 21 | [Productos CRUD](endpoints/21-productos-crud.md) | `POST /api/item`, `POST /api/items/{id}/update`, `GET /api/document/search-items` |
+| 22 | [Inventario: Movimientos](endpoints/22-inventario-movimientos.md) | `POST /api/inventory/transaction` |
+| 23 | [Stock por Establecimiento](endpoints/23-stock-por-establecimiento.md) | Arquitectura `item_warehouse`, descuento automático, `GET /api/offline/stock` |
+| 24 | [Detracciones y Retención IGV](endpoints/24-detraccion-retencion-igv.md) | Campos `detraccion{}` y `retencion{}` en facturas |
+| 25 | [Comprobante de Retención](endpoints/25-comprobante-retencion.md) | `POST /api/retentions` (tipo 20) |
+| 26 | [Envío Diferido y Update Estado](endpoints/26-envio-diferido-update-estado.md) | `POST /api/documents/send`, `POST /api/documents/updatedocumentstatus` |
+| 27 | [Contingencia](endpoints/27-contingencia.md) | Series `0xxx`, flujo contingencia desde Flutter |
+
 ---
 
 ## Autenticación
@@ -138,6 +150,7 @@ El token se obtiene en el login y no expira mientras la sesión esté activa.
 | `07` | Nota de Crédito Electrónica | FC01 / BC01 |
 | `08` | Nota de Débito Electrónica | FD01 / BD01 |
 | `09` | Guía de Remisión Remitente | T001 |
+| `20` | Comprobante de Retención | R001 |
 | `31` | Guía de Remisión Transportista | V001 |
 | `80` | Nota de Venta | NV01 |
 

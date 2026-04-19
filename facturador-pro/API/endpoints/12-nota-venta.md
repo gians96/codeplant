@@ -274,3 +274,69 @@ Misma estructura que Boleta/Factura (campos en español):
 - **`series_id` es el ID** de la serie en BD (no el código). Obtenerlo de `series-numbering`.
 - **No tiene `numero_documento`** como campo explícito — el número lo genera el backend basado en `series_id`. Para offline, el backend auto-numera al sincronizar.
 - **La nota de venta NO tiene constraint unique** en BD para el filename. Esto hace que la idempotencia con `offline_id` sea **crítica** para evitar duplicados al re-enviar.
+
+---
+
+## Campos Opcionales del Item (detalle)
+
+Además de los campos requeridos, cada item de la nota de venta soporta:
+
+### `warehouse_id` — Stock por almacén
+
+```json
+{
+    "item_id": 3,
+    "warehouse_id": 2,
+    "item": { "..." : "..." },
+    "quantity": 5,
+    "...": "..."
+}
+```
+
+Indica desde qué almacén se descuenta el stock. Si no se envía, se usa el almacén del establecimiento del usuario autenticado.
+
+> **Para Flutter offline:** Enviar el `warehouse_id` obtenido de la descarga de datos de empresa (`establishments[].warehouse.id`). El stock se descuenta automáticamente al crear el SaleNoteItem via Model Events (`InventoryKardexServiceProvider`).
+
+### Campos de lotes y series
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `lots` | array | Lotes/series del item |
+| `IdLoteSelected` | string\|null | Lote seleccionado |
+
+```json
+{
+    "item_id": 3,
+    "lots": [
+        {
+            "serie": "LOTE-2026-001",
+            "date": "2027-12-31",
+            "quantity": 5
+        }
+    ],
+    "...": "..."
+}
+```
+
+### Campos adicionales por item
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `additional_information` | string\|null | Info adicional para PDF (debajo de la descripción) |
+| `name_product_pdf` | string\|null | Nombre que aparece en el PDF (override) |
+| `attributes` | array | Atributos extra: `[{code, name, value}]` |
+| `charges` | array | Cargos por item |
+| `discounts` | array | Descuentos por item |
+
+### `force_create_if_not_exist`
+
+A nivel de payload (no dentro de items):
+
+```json
+{
+    "force_create_if_not_exist": true,
+    "items": [ "..." ]
+}
+```
+
+Cuando es `true`, si un item con el `internal_id` dado no existe en la BD, el backend lo crea automáticamente. Lo mismo aplica para el cliente (`datos_del_cliente_o_receptor`). Es crítico para modo offline donde el vendedor puede agregar productos nuevos.

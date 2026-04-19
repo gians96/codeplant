@@ -313,9 +313,1121 @@ Totales:
 
 ---
 
+## Tipos de Operación (`codigo_tipo_operacion`)
+
+| Código | Nombre | Descripción | Campos adicionales requeridos |
+|--------|--------|-------------|-------------------------------|
+| `0101` | **Venta interna** | Operación gravada estándar (la más común) | Ninguno |
+| `0112` | **Compra interna** | Compra interna | Ninguno |
+| `0200` | **Exportación de Bienes** | Venta a clientes en el extranjero | `total_exportacion` en totales |
+| `0201` | **Ventas no domiciliados** | Ventas a no domiciliados que no califican como exportación | — |
+| `1001` | **Operación Sujeta a Detracción** | Requiere bloque `detraccion{}` en el payload | `detraccion{}` (ver sección abajo) |
+| `1004` | **Detracción - Servicios Transporte Carga** | Detracción específica para transporte | `detraccion{}` con campos de transporte |
+
+> **Para Flutter offline:** Los más usados son `0101` (venta interna) y `1001` (detracción).
+> Al seleccionar `1001` o `1004`, se agrega automáticamente la leyenda `2006` = "Operación sujeta a detracción".
+
+---
+
+## Detracciones (`detraccion`)
+
+Cuando `codigo_tipo_operacion` es `"1001"` o `"1004"`, se debe incluir el bloque `detraccion` en el payload. Se envía dentro del mismo JSON a nivel raíz (no dentro de items ni totales).
+
+> **Ref código:** `DocumentTransform.php` → método `detraction()` transforma los campos español→inglés.
+
+### Campos del objeto `detraccion`
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `codigo_tipo_detraccion` | string | **Sí** | Código del bien/servicio sujeto a detracción (catálogo SUNAT 54). Ej: `"037"` (demás servicios gravados con IGV) |
+| `porcentaje` | float | **Sí** | Porcentaje de detracción. Ej: `12` |
+| `monto` | float | **Sí** | Monto de detracción = `total_venta * porcentaje / 100` |
+| `codigo_metodo_pago` | string | **Sí** | `"001"` = Depósito en cuenta |
+| `cuenta_bancaria` | string | **Sí** | Número de cuenta Banco de la Nación del proveedor |
+
+#### Campos adicionales para transporte (`1004`)
+
+| Campo | Tipo | Requerido (1004) | Descripción |
+|-------|------|-------------------|-------------|
+| `detalle_viaje` | string | Sí | Descripción del viaje |
+| `direccion_origen` | string | Sí | Dirección punto de partida |
+| `direccion_destino` | string | Sí | Dirección punto de llegada |
+| `ubigeo_origen` | string | Sí | Ubigeo de origen (6 dígitos) |
+| `ubigeo_destino` | string | Sí | Ubigeo de destino (6 dígitos) |
+| `valor_referencial_carga_util` | float | No | Valor referencial servicio de transporte carga útil |
+| `valor_referencial_servicio_transporte` | float | No | Valor referencial servicio transporte |
+| `valor_referencia_carga_efectiva` | float | No | Valor referencia carga efectiva |
+
+### Ejemplo — Factura con detracción (`1001`)
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "1001",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "fecha_de_vencimiento": "2026-05-18",
+    "datos_del_cliente_o_receptor": {
+        "codigo_tipo_documento_identidad": "6",
+        "numero_documento": "20501973522",
+        "apellidos_y_nombres_o_razon_social": "EMPRESA XYZ S.A.C.",
+        "codigo_pais": "PE",
+        "ubigeo": "150101",
+        "direccion": "Av. Argentina 2458",
+        "correo_electronico": "contabilidad@empresa.com",
+        "telefono": "01-4271148"
+    },
+    "detraccion": {
+        "codigo_tipo_detraccion": "037",
+        "porcentaje": 12,
+        "monto": 6000,
+        "codigo_metodo_pago": "001",
+        "cuenta_bancaria": "00-071-123456"
+    },
+    "totales": {
+        "total_exportacion": 0,
+        "total_operaciones_gravadas": 42372.88,
+        "total_operaciones_inafectas": 0,
+        "total_operaciones_exoneradas": 0,
+        "total_operaciones_gratuitas": 0,
+        "total_igv": 7627.12,
+        "total_impuestos": 7627.12,
+        "total_valor": 42372.88,
+        "total_venta": 50000
+    },
+    "items": [
+        {
+            "codigo_interno": "OLV30",
+            "descripcion": "ACEITE DE OLIVA COSMETICO FCO X30ML",
+            "codigo_producto_sunat": "51121703",
+            "unidad_de_medida": "NIU",
+            "cantidad": 500,
+            "valor_unitario": 84.7457627118644,
+            "precio_unitario": 100,
+            "codigo_tipo_precio": "01",
+            "codigo_tipo_afectacion_igv": "10",
+            "total_base_igv": 42372.88,
+            "porcentaje_igv": 18,
+            "total_igv": 7627.12,
+            "total_impuestos": 7627.12,
+            "total_valor_item": 42372.88,
+            "total_item": 50000
+        }
+    ],
+    "pagos": [
+        {
+            "codigo_metodo_pago": "01",
+            "monto": 50000
+        }
+    ]
+}
+```
+
+> **Leyendas automáticas:** Al usar `1001`, el backend agrega automáticamente `legends[{code:"2006", value:"Operación sujeta a detracción"}]`.
+
+---
+
+## Retención de IGV (`retencion`)
+
+Cuando el cliente es agente de retención del IGV, se puede marcar el documento con retención. Esto no es lo mismo que el comprobante de retención (tipo 20). La retención de IGV se aplica **dentro** del documento (factura/boleta).
+
+> **Ref código:** `invoice.vue` → `changeRetention()`. El campo se almacena como JSON en `Document.retention`.
+
+### Campos del objeto `retencion`
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `code` | string | **Sí** | `"62"` = Retención IGV |
+| `percentage` | float | **Sí** | Porcentaje de retención (ej: `3` → 0.03 internamente). Se toma de `config.igv_retention_percentage` |
+| `amount` | float | **Sí** | Monto de retención = `base * percentage / 100` |
+| `base` | float | **Sí** | Base imponible (normalmente = `total_venta`) |
+| `currency_type_id` | string | **Sí** | `"PEN"` o `"USD"` |
+| `exchange_rate` | float | No | Tipo de cambio al momento de la retención |
+
+### Ejemplo — Factura con retención IGV
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "retencion": {
+        "code": "62",
+        "percentage": 3,
+        "amount": 3.54,
+        "base": 118,
+        "currency_type_id": "PEN",
+        "exchange_rate": 1
+    },
+    "datos_del_cliente_o_receptor": { "..." : "..." },
+    "totales": { "..." : "..." },
+    "items": [ "..." ]
+}
+```
+
+> **Nota:** La retención impacta en `total_pending_payment` cuando la condición de pago es crédito (`02`/`03`): el monto pendiente se reduce por el monto de retención.
+
+---
+
+## Condiciones de Pago (`codigo_condicion_de_pago`)
+
+Determina cómo se estructura el pago del comprobante.
+
+| Código | Nombre | Descripción |
+|--------|--------|-------------|
+| `01` | **Contado** | Pago inmediato. Default si no se envía. Requiere `pagos[]` |
+| `02` | **Crédito** | Pago a plazos sin cuotas definidas |
+| `03` | **Crédito con cuotas** | Pago a plazos con calendario de cuotas |
+
+### `pagos[]` — Para contado (`01`)
+
+Ya documentado arriba. Se envían los pagos realizados al momento de la venta.
+
+### `cuotas[]` — Para crédito (`02` / `03`)
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `fecha` | string | **Sí** | Fecha de vencimiento de la cuota `YYYY-MM-DD` |
+| `codigo_tipo_moneda` | string | **Sí** | `"PEN"`, `"USD"` |
+| `monto` | float | **Sí** | Monto de la cuota |
+| `codigo_tipo_metodo_pago` | string | No | Método de pago esperado |
+
+### Ejemplo — Factura a crédito con cuotas
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "codigo_condicion_de_pago": "03",
+    "datos_del_cliente_o_receptor": {
+        "codigo_tipo_documento_identidad": "6",
+        "numero_documento": "20501973522",
+        "apellidos_y_nombres_o_razon_social": "EMPRESA XYZ S.A.C.",
+        "codigo_pais": "PE",
+        "direccion": "Av. Argentina 2458"
+    },
+    "cuotas": [
+        {
+            "fecha": "2026-05-18",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 59
+        },
+        {
+            "fecha": "2026-06-18",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 59
+        }
+    ],
+    "totales": {
+        "total_operaciones_gravadas": 100,
+        "total_igv": 18,
+        "total_impuestos": 18,
+        "total_valor": 100,
+        "total_venta": 118
+    },
+    "items": [
+        {
+            "codigo_interno": "P0121",
+            "descripcion": "Inca Kola 250 ml",
+            "unidad_de_medida": "NIU",
+            "cantidad": 2,
+            "valor_unitario": 50,
+            "precio_unitario": 59,
+            "codigo_tipo_precio": "01",
+            "codigo_tipo_afectacion_igv": "10",
+            "total_base_igv": 100,
+            "porcentaje_igv": 18,
+            "total_igv": 18,
+            "total_impuestos": 18,
+            "total_valor_item": 100,
+            "total_item": 118
+        }
+    ]
+}
+```
+
+---
+
+## Campos Adicionales del Item (detalle completo)
+
+Además de los campos requeridos ya documentados, cada item soporta estos campos opcionales que se envían dentro del array `items[]`:
+
+### `informacion_adicional`
+
+```json
+{
+    "codigo_interno": "P001",
+    "descripcion": "Producto ejemplo",
+    "informacion_adicional": "Color: Rojo | Talla: M",
+    "...": "..."
+}
+```
+
+Se muestra en el PDF debajo de la descripción del item.
+
+### `warehouse_id` — Stock por almacén
+
+```json
+{
+    "codigo_interno": "P001",
+    "warehouse_id": 2,
+    "...": "..."
+}
+```
+
+Indica desde qué almacén se descuenta el stock. Si no se envía, se usa el almacén del establecimiento del usuario autenticado.
+
+> **Para Flutter offline:** Enviar el `warehouse_id` del establecimiento asociado. Se obtiene de la descarga inicial (`company` → `establishments[]` → `warehouse.id`).
+
+### `lots[]` — Lotes y series
+
+```json
+{
+    "codigo_interno": "P001",
+    "lots": [
+        {
+            "serie": "LOTE-2026-001",
+            "date": "2027-12-31",
+            "quantity": 10
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `descuentos[]` y `cargos[]`
+
+```json
+{
+    "codigo_interno": "P001",
+    "descuentos": [
+        {
+            "codigo_tipo_descuento": "00",
+            "descripcion": "Descuento 10%",
+            "porcentaje": 10,
+            "monto": 10,
+            "base": 100
+        }
+    ],
+    "cargos": [
+        {
+            "codigo_tipo_cargo": "50",
+            "descripcion": "Cargo adicional",
+            "porcentaje": 0,
+            "monto": 5,
+            "base": 100
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `datos_adicionales[]` — Atributos
+
+```json
+{
+    "codigo_interno": "P001",
+    "datos_adicionales": [
+        {
+            "codigo": "5010",
+            "descripcion": "Número de placa",
+            "valor": "ABC-123",
+            "fecha_inicio": null,
+            "fecha_fin": null,
+            "duracion": null
+        }
+    ],
+    "...": "..."
+}
+```
+
+---
+
+## Campos Adicionales del Documento
+
+Campos opcionales a nivel raíz del payload que controlan comportamientos especiales:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `numero_orden_de_compra` | string | Número de orden de compra del cliente |
+| `numero_de_placa` | string | Placa del vehículo (usado en grifos/combustibles) |
+| `codigo_vendedor` | int | ID del vendedor asignado. Ref: [06-vendedores.md](06-vendedores.md) |
+| `informacion_adicional` | string\|null | Info extra para PDF. Formato pipe-separated: `"Forma de pago:Efectivo\|Caja: 1"` |
+| `factor_tipo_de_cambio` | float | Tipo de cambio cuando la moneda es USD. Default `1` para PEN |
+| `acciones` | object | Control de envío (ver sección Factura Sin Enviar) |
+
+### `guias[]` — Guías de remisión vinculadas
+
+```json
+{
+    "guias": [
+        {
+            "codigo_tipo_documento": "09",
+            "numero_documento": "T001-1"
+        },
+        {
+            "codigo_tipo_documento": "31",
+            "numero_documento": "V001-1"
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `anticipos[]` — Pagos anticipados
+
+```json
+{
+    "anticipos": [
+        {
+            "codigo_tipo_documento": "02",
+            "numero_documento": "F001-5",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 500
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `leyendas[]` — Leyendas SUNAT
+
+Se agregan automáticamente según el tipo de operación, pero pueden enviarse manualmente:
+
+```json
+{
+    "leyendas": [
+        {
+            "codigo": "1000",
+            "valor": "CIENTO DIECIOCHO CON 00/100 SOLES"
+        },
+        {
+            "codigo": "2006",
+            "valor": "Operación sujeta a detracción"
+        }
+    ]
+}
+```
+
+---
+
+## Factura de Contingencia
+
+Para generar una factura de contingencia, debe registrar previamente las series de contingencia en el módulo **Usuarios/Locales & Series** → sección **Establecimientos**.
+
+Las series de contingencia **empiezan con `0`** (ej: `0001`, `0F01`).
+
+```json
+{
+    "serie_documento": "0001",
+    "numero_documento": "#",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "...": "resto del payload normal"
+}
+```
+
+> **Para Flutter offline:** Si se detecta que no hay internet y la empresa tiene series de contingencia configuradas, usar la serie `0###` para que SUNAT acepte el envío posterior. Las series normales (`F001`, `B001`) también se pueden generar sin enviar usando `acciones.enviar_xml_firmado: false`.
+
+---
+
+## Factura Sin Enviar a SUNAT (modo offline del backend)
+
+Se puede generar el documento completo (XML + PDF) sin enviarlo a SUNAT. Útil cuando el servidor no tiene internet pero el Flutter sí pudo sincronizar.
+
+### Paso 1 — Crear sin enviar
+
+Agregar el bloque `acciones` al payload:
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "acciones": {
+        "enviar_xml_firmado": false
+    },
+    "...": "resto del payload"
+}
+```
+
+El documento se crea con `state_type_id: "01"` (Registrado) en vez de `"03"` (Enviado).
+
+### Paso 2 — Enviar posteriormente
+
+```
+POST /api/documents/send
+Authorization: Bearer {token}
+```
+
+```json
+{
+    "external_id": "2dded172-cd17-4078-9c88-10a9b1177f2d"
+}
+```
+
+**Response (200):**
+```json
+{
+    "success": true,
+    "data": {
+        "number": "F001-1",
+        "filename": "20538856674-01-F001-1",
+        "external_id": "2dded172-cd17-4078-9c88-10a9b1177f2d"
+    },
+    "links": { "xml": "...", "pdf": "...", "cdr": "..." },
+    "response": { "code": "0", "description": "La Factura ... ha sido aceptada" }
+}
+```
+
+### Paso 3 — Actualizar estado manualmente
+
+```
+POST /api/documents/updatedocumentstatus
+Authorization: Bearer {token}
+```
+
+```json
+{
+    "externail_id": "2dded172-cd17-4078-9c88-10a9b1177f2d",
+    "state_type_id": "05"
+}
+```
+
+> **Nota:** El campo se llama `externail_id` (con typo) en la API real. No es `external_id`.
+
+**Estados disponibles:**
+
+| Código | Estado |
+|--------|--------|
+| `01` | Registrado |
+| `03` | Enviado |
+| `05` | Aceptado |
+| `07` | Observado |
+| `09` | Rechazado |
+| `11` | Anulado |
+| `13` | Por anular |
+
+---
+
+## Variantes de Afectación IGV por Item
+
+El campo `codigo_tipo_afectacion_igv` determina el tratamiento tributario de cada item:
+
+### Gravado (código `10` - `17`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `10` | Gravado - Operación Onerosa | 18% | `precio_unitario / 1.18` |
+| `11` | Gravado - Retiro por premio | 18% | `precio_unitario / 1.18` |
+| `12` | Gravado - Retiro por donación | 18% | `precio_unitario / 1.18` |
+| `13` | Gravado - Retiro | 18% | `precio_unitario / 1.18` |
+| `14` | Gravado - Retiro por publicidad | 18% | `precio_unitario / 1.18` |
+| `15` | Gravado - Bonificaciones | 18% | `precio_unitario / 1.18` |
+| `16` | Gravado - Retiro (Gratuito) | 18% calcula pero `total_impuestos=0` | `0` (precio_referencial) |
+| `17` | Gravado - Retiro por convenio colectivo | 18% | `precio_unitario / 1.18` |
+
+### Exonerado (código `20` - `21`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `20` | Exonerado - Operación Onerosa | 0% | `= precio_unitario` |
+| `21` | Exonerado - Gratuita | 0% | `0` |
+
+### Inafecto (código `30` - `40`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `30` | Inafecto - Operación Onerosa | 0% | `= precio_unitario` |
+| `31` | Inafecto - Retiro por bonificación | 0% | `0` |
+| `32` | Inafecto - Retiro | 0% | `0` |
+| `33` | Inafecto - Retiro por muestras médicas | 0% | `0` |
+| `34` | Inafecto - Retiro por convenio colectivo | 0% | `0` |
+| `35` | Inafecto - Retiro por premio | 0% | `0` |
+| `36` | Inafecto - Retiro por publicidad | 0% | `0` |
+| `37` | Inafecto - Transferencia gratuita | 0% | `0` |
+| `40` | Exportación de bienes | 0% | `= precio_unitario` |
+
+> **Gratuitos (códigos 11-17, 21, 31-37):** El `precio_unitario` debe ser `0`, pero se envía el valor referencial como `valor_unitario`. Se usa `codigo_tipo_precio: "02"` (valor referencial). Los totales se suman en `total_operaciones_gratuitas` en vez de `total_operaciones_gravadas`.
+
+---
+
+## Tipos de Operación (`codigo_tipo_operacion`)
+
+| Código | Nombre | Descripción | Campos adicionales requeridos |
+|--------|--------|-------------|-------------------------------|
+| `0101` | **Venta interna** | Operación gravada estándar (la más común) | Ninguno |
+| `0112` | **Compra interna** | Compra interna | Ninguno |
+| `0200` | **Exportación de Bienes** | Venta a clientes en el extranjero | `total_exportacion` en totales |
+| `0201` | **Ventas no domiciliados** | Ventas a no domiciliados que no califican como exportación | — |
+| `1001` | **Operación Sujeta a Detracción** | Requiere bloque `detraccion{}` en el payload | `detraccion{}` (ver sección abajo) |
+| `1004` | **Detracción - Servicios Transporte Carga** | Detracción específica para transporte | `detraccion{}` con campos de transporte |
+
+> **Para Flutter offline:** Los más usados son `0101` (venta interna) y `1001` (detracción).
+> Al seleccionar `1001` o `1004`, se agrega automáticamente la leyenda `2006` = "Operación sujeta a detracción".
+
+---
+
+## Detracciones (`detraccion`)
+
+Cuando `codigo_tipo_operacion` es `"1001"` o `"1004"`, se debe incluir el bloque `detraccion` en el payload. Se envía dentro del mismo JSON a nivel raíz (no dentro de items ni totales).
+
+> **Ref código:** `DocumentTransform.php` → método `detraction()` transforma los campos español→inglés.
+
+### Campos del objeto `detraccion`
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `codigo_tipo_detraccion` | string | **Sí** | Código del bien/servicio sujeto a detracción (catálogo SUNAT 54). Ej: `"037"` (demás servicios gravados con IGV) |
+| `porcentaje` | float | **Sí** | Porcentaje de detracción. Ej: `12` |
+| `monto` | float | **Sí** | Monto de detracción = `total_venta * porcentaje / 100` |
+| `codigo_metodo_pago` | string | **Sí** | `"001"` = Depósito en cuenta |
+| `cuenta_bancaria` | string | **Sí** | Número de cuenta Banco de la Nación del proveedor |
+
+#### Campos adicionales para transporte (`1004`)
+
+| Campo | Tipo | Requerido (1004) | Descripción |
+|-------|------|-------------------|-------------|
+| `detalle_viaje` | string | Sí | Descripción del viaje |
+| `direccion_origen` | string | Sí | Dirección punto de partida |
+| `direccion_destino` | string | Sí | Dirección punto de llegada |
+| `ubigeo_origen` | string | Sí | Ubigeo de origen (6 dígitos) |
+| `ubigeo_destino` | string | Sí | Ubigeo de destino (6 dígitos) |
+| `valor_referencial_carga_util` | float | No | Valor referencial servicio de transporte carga útil |
+| `valor_referencial_servicio_transporte` | float | No | Valor referencial servicio transporte |
+| `valor_referencia_carga_efectiva` | float | No | Valor referencia carga efectiva |
+
+### Ejemplo — Factura con detracción (`1001`)
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "1001",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "fecha_de_vencimiento": "2026-05-18",
+    "datos_del_cliente_o_receptor": {
+        "codigo_tipo_documento_identidad": "6",
+        "numero_documento": "20501973522",
+        "apellidos_y_nombres_o_razon_social": "EMPRESA XYZ S.A.C.",
+        "codigo_pais": "PE",
+        "ubigeo": "150101",
+        "direccion": "Av. Argentina 2458",
+        "correo_electronico": "contabilidad@empresa.com",
+        "telefono": "01-4271148"
+    },
+    "detraccion": {
+        "codigo_tipo_detraccion": "037",
+        "porcentaje": 12,
+        "monto": 6000,
+        "codigo_metodo_pago": "001",
+        "cuenta_bancaria": "00-071-123456"
+    },
+    "totales": {
+        "total_exportacion": 0,
+        "total_operaciones_gravadas": 42372.88,
+        "total_operaciones_inafectas": 0,
+        "total_operaciones_exoneradas": 0,
+        "total_operaciones_gratuitas": 0,
+        "total_igv": 7627.12,
+        "total_impuestos": 7627.12,
+        "total_valor": 42372.88,
+        "total_venta": 50000
+    },
+    "items": [
+        {
+            "codigo_interno": "OLV30",
+            "descripcion": "ACEITE DE OLIVA COSMETICO FCO X30ML",
+            "codigo_producto_sunat": "51121703",
+            "unidad_de_medida": "NIU",
+            "cantidad": 500,
+            "valor_unitario": 84.7457627118644,
+            "precio_unitario": 100,
+            "codigo_tipo_precio": "01",
+            "codigo_tipo_afectacion_igv": "10",
+            "total_base_igv": 42372.88,
+            "porcentaje_igv": 18,
+            "total_igv": 7627.12,
+            "total_impuestos": 7627.12,
+            "total_valor_item": 42372.88,
+            "total_item": 50000
+        }
+    ],
+    "pagos": [
+        {
+            "codigo_metodo_pago": "01",
+            "monto": 50000
+        }
+    ]
+}
+```
+
+> **Leyendas automáticas:** Al usar `1001`, el backend agrega automáticamente `legends[{code:"2006", value:"Operación sujeta a detracción"}]`.
+
+---
+
+## Retención de IGV (`retencion`)
+
+Cuando el cliente es agente de retención del IGV, se puede marcar el documento con retención. Esto no es lo mismo que el comprobante de retención (tipo 20). La retención de IGV se aplica **dentro** del documento (factura/boleta).
+
+> **Ref código:** `invoice.vue` → `changeRetention()`. El campo se almacena como JSON en `Document.retention`.
+
+### Campos del objeto `retencion`
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `code` | string | **Sí** | `"62"` = Retención IGV |
+| `percentage` | float | **Sí** | Porcentaje de retención (ej: `3` → 0.03 internamente). Se toma de `config.igv_retention_percentage` |
+| `amount` | float | **Sí** | Monto de retención = `base * percentage / 100` |
+| `base` | float | **Sí** | Base imponible (normalmente = `total_venta`) |
+| `currency_type_id` | string | **Sí** | `"PEN"` o `"USD"` |
+| `exchange_rate` | float | No | Tipo de cambio al momento de la retención |
+
+### Ejemplo — Factura con retención IGV
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "retencion": {
+        "code": "62",
+        "percentage": 3,
+        "amount": 3.54,
+        "base": 118,
+        "currency_type_id": "PEN",
+        "exchange_rate": 1
+    },
+    "datos_del_cliente_o_receptor": { "..." : "..." },
+    "totales": { "..." : "..." },
+    "items": [ "..." ]
+}
+```
+
+> **Nota:** La retención impacta en `total_pending_payment` cuando la condición de pago es crédito (`02`/`03`): el monto pendiente se reduce por el monto de retención.
+
+---
+
+## Condiciones de Pago (`codigo_condicion_de_pago`)
+
+Determina cómo se estructura el pago del comprobante.
+
+| Código | Nombre | Descripción |
+|--------|--------|-------------|
+| `01` | **Contado** | Pago inmediato. Default si no se envía. Requiere `pagos[]` |
+| `02` | **Crédito** | Pago a plazos sin cuotas definidas |
+| `03` | **Crédito con cuotas** | Pago a plazos con calendario de cuotas |
+
+### `pagos[]` — Para contado (`01`)
+
+Ya documentado arriba. Se envían los pagos realizados al momento de la venta.
+
+### `cuotas[]` — Para crédito (`02` / `03`)
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `fecha` | string | **Sí** | Fecha de vencimiento de la cuota `YYYY-MM-DD` |
+| `codigo_tipo_moneda` | string | **Sí** | `"PEN"`, `"USD"` |
+| `monto` | float | **Sí** | Monto de la cuota |
+| `codigo_tipo_metodo_pago` | string | No | Método de pago esperado |
+
+### Ejemplo — Factura a crédito con cuotas
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "fecha_de_emision": "2026-04-18",
+    "hora_de_emision": "14:30:00",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "codigo_tipo_moneda": "PEN",
+    "codigo_condicion_de_pago": "03",
+    "datos_del_cliente_o_receptor": {
+        "codigo_tipo_documento_identidad": "6",
+        "numero_documento": "20501973522",
+        "apellidos_y_nombres_o_razon_social": "EMPRESA XYZ S.A.C.",
+        "codigo_pais": "PE",
+        "direccion": "Av. Argentina 2458"
+    },
+    "cuotas": [
+        {
+            "fecha": "2026-05-18",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 59
+        },
+        {
+            "fecha": "2026-06-18",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 59
+        }
+    ],
+    "totales": {
+        "total_operaciones_gravadas": 100,
+        "total_igv": 18,
+        "total_impuestos": 18,
+        "total_valor": 100,
+        "total_venta": 118
+    },
+    "items": [
+        {
+            "codigo_interno": "P0121",
+            "descripcion": "Inca Kola 250 ml",
+            "unidad_de_medida": "NIU",
+            "cantidad": 2,
+            "valor_unitario": 50,
+            "precio_unitario": 59,
+            "codigo_tipo_precio": "01",
+            "codigo_tipo_afectacion_igv": "10",
+            "total_base_igv": 100,
+            "porcentaje_igv": 18,
+            "total_igv": 18,
+            "total_impuestos": 18,
+            "total_valor_item": 100,
+            "total_item": 118
+        }
+    ]
+}
+```
+
+---
+
+## Campos Adicionales del Item (detalle completo)
+
+Además de los campos requeridos ya documentados, cada item soporta estos campos opcionales que se envían dentro del array `items[]`:
+
+### `informacion_adicional`
+
+```json
+{
+    "codigo_interno": "P001",
+    "descripcion": "Producto ejemplo",
+    "informacion_adicional": "Color: Rojo | Talla: M",
+    "...": "..."
+}
+```
+
+Se muestra en el PDF debajo de la descripción del item.
+
+### `warehouse_id` — Stock por almacén
+
+```json
+{
+    "codigo_interno": "P001",
+    "warehouse_id": 2,
+    "...": "..."
+}
+```
+
+Indica desde qué almacén se descuenta el stock. Si no se envía, se usa el almacén del establecimiento del usuario autenticado.
+
+> **Para Flutter offline:** Enviar el `warehouse_id` del establecimiento asociado. Se obtiene de la descarga inicial (`company` → `establishments[]` → `warehouse.id`).
+
+### `lots[]` — Lotes y series
+
+```json
+{
+    "codigo_interno": "P001",
+    "lots": [
+        {
+            "serie": "LOTE-2026-001",
+            "date": "2027-12-31",
+            "quantity": 10
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `descuentos[]` y `cargos[]`
+
+```json
+{
+    "codigo_interno": "P001",
+    "descuentos": [
+        {
+            "codigo_tipo_descuento": "00",
+            "descripcion": "Descuento 10%",
+            "porcentaje": 10,
+            "monto": 10,
+            "base": 100
+        }
+    ],
+    "cargos": [
+        {
+            "codigo_tipo_cargo": "50",
+            "descripcion": "Cargo adicional",
+            "porcentaje": 0,
+            "monto": 5,
+            "base": 100
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `datos_adicionales[]` — Atributos
+
+```json
+{
+    "codigo_interno": "P001",
+    "datos_adicionales": [
+        {
+            "codigo": "5010",
+            "descripcion": "Número de placa",
+            "valor": "ABC-123",
+            "fecha_inicio": null,
+            "fecha_fin": null,
+            "duracion": null
+        }
+    ],
+    "...": "..."
+}
+```
+
+---
+
+## Campos Adicionales del Documento
+
+Campos opcionales a nivel raíz del payload que controlan comportamientos especiales:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `numero_orden_de_compra` | string | Número de orden de compra del cliente |
+| `numero_de_placa` | string | Placa del vehículo (usado en grifos/combustibles) |
+| `codigo_vendedor` | int | ID del vendedor asignado. Ref: [06-vendedores.md](06-vendedores.md) |
+| `informacion_adicional` | string\|null | Info extra para PDF. Formato pipe-separated: `"Forma de pago:Efectivo\|Caja: 1"` |
+| `factor_tipo_de_cambio` | float | Tipo de cambio cuando la moneda es USD. Default `1` para PEN |
+| `acciones` | object | Control de envío (ver sección Factura Sin Enviar) |
+
+### `guias[]` — Guías de remisión vinculadas
+
+```json
+{
+    "guias": [
+        {
+            "codigo_tipo_documento": "09",
+            "numero_documento": "T001-1"
+        },
+        {
+            "codigo_tipo_documento": "31",
+            "numero_documento": "V001-1"
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `anticipos[]` — Pagos anticipados
+
+```json
+{
+    "anticipos": [
+        {
+            "codigo_tipo_documento": "02",
+            "numero_documento": "F001-5",
+            "codigo_tipo_moneda": "PEN",
+            "monto": 500
+        }
+    ],
+    "...": "..."
+}
+```
+
+### `leyendas[]` — Leyendas SUNAT
+
+Se agregan automáticamente según el tipo de operación, pero pueden enviarse manualmente:
+
+```json
+{
+    "leyendas": [
+        {
+            "codigo": "1000",
+            "valor": "CIENTO DIECIOCHO CON 00/100 SOLES"
+        },
+        {
+            "codigo": "2006",
+            "valor": "Operación sujeta a detracción"
+        }
+    ]
+}
+```
+
+---
+
+## Factura de Contingencia
+
+Para generar una factura de contingencia, debe registrar previamente las series de contingencia en el módulo **Usuarios/Locales & Series** → sección **Establecimientos**.
+
+Las series de contingencia **empiezan con `0`** (ej: `0001`, `0F01`).
+
+```json
+{
+    "serie_documento": "0001",
+    "numero_documento": "#",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "...": "resto del payload normal"
+}
+```
+
+> **Para Flutter offline:** Si se detecta que no hay internet y la empresa tiene series de contingencia configuradas, usar la serie `0###` para que SUNAT acepte el envío posterior. Las series normales (`F001`, `B001`) también se pueden generar sin enviar usando `acciones.enviar_xml_firmado: false`.
+
+---
+
+## Factura Sin Enviar a SUNAT (modo offline del backend)
+
+Se puede generar el documento completo (XML + PDF) sin enviarlo a SUNAT. Útil cuando el servidor no tiene internet pero el Flutter sí pudo sincronizar.
+
+### Paso 1 — Crear sin enviar
+
+Agregar el bloque `acciones` al payload:
+
+```json
+{
+    "serie_documento": "F001",
+    "numero_documento": "#",
+    "codigo_tipo_operacion": "0101",
+    "codigo_tipo_documento": "01",
+    "acciones": {
+        "enviar_xml_firmado": false
+    },
+    "...": "resto del payload"
+}
+```
+
+El documento se crea con `state_type_id: "01"` (Registrado) en vez de `"03"` (Enviado).
+
+### Paso 2 — Enviar posteriormente
+
+```
+POST /api/documents/send
+Authorization: Bearer {token}
+```
+
+```json
+{
+    "external_id": "2dded172-cd17-4078-9c88-10a9b1177f2d"
+}
+```
+
+**Response (200):**
+```json
+{
+    "success": true,
+    "data": {
+        "number": "F001-1",
+        "filename": "20538856674-01-F001-1",
+        "external_id": "2dded172-cd17-4078-9c88-10a9b1177f2d"
+    },
+    "links": { "xml": "...", "pdf": "...", "cdr": "..." },
+    "response": { "code": "0", "description": "La Factura ... ha sido aceptada" }
+}
+```
+
+### Paso 3 — Actualizar estado manualmente
+
+```
+POST /api/documents/updatedocumentstatus
+Authorization: Bearer {token}
+```
+
+```json
+{
+    "externail_id": "2dded172-cd17-4078-9c88-10a9b1177f2d",
+    "state_type_id": "05"
+}
+```
+
+> **Nota:** El campo se llama `externail_id` (con typo) en la API real. No es `external_id`.
+
+**Estados disponibles:**
+
+| Código | Estado |
+|--------|--------|
+| `01` | Registrado |
+| `03` | Enviado |
+| `05` | Aceptado |
+| `07` | Observado |
+| `09` | Rechazado |
+| `11` | Anulado |
+| `13` | Por anular |
+
+---
+
+## Variantes de Afectación IGV por Item
+
+El campo `codigo_tipo_afectacion_igv` determina el tratamiento tributario de cada item:
+
+### Gravado (código `10` - `17`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `10` | Gravado - Operación Onerosa | 18% | `precio_unitario / 1.18` |
+| `11` | Gravado - Retiro por premio | 18% | `precio_unitario / 1.18` |
+| `12` | Gravado - Retiro por donación | 18% | `precio_unitario / 1.18` |
+| `13` | Gravado - Retiro | 18% | `precio_unitario / 1.18` |
+| `14` | Gravado - Retiro por publicidad | 18% | `precio_unitario / 1.18` |
+| `15` | Gravado - Bonificaciones | 18% | `precio_unitario / 1.18` |
+| `16` | Gravado - Retiro (Gratuito) | 18% calcula pero `total_impuestos=0` | `0` (precio_referencial) |
+| `17` | Gravado - Retiro por convenio colectivo | 18% | `precio_unitario / 1.18` |
+
+### Exonerado (código `20` - `21`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `20` | Exonerado - Operación Onerosa | 0% | `= precio_unitario` |
+| `21` | Exonerado - Gratuita | 0% | `0` |
+
+### Inafecto (código `30` - `40`)
+
+| Código | Nombre | IGV | valor_unitario |
+|--------|--------|-----|----------------|
+| `30` | Inafecto - Operación Onerosa | 0% | `= precio_unitario` |
+| `31` | Inafecto - Retiro por bonificación | 0% | `0` |
+| `32` | Inafecto - Retiro | 0% | `0` |
+| `33` | Inafecto - Retiro por muestras médicas | 0% | `0` |
+| `34` | Inafecto - Retiro por convenio colectivo | 0% | `0` |
+| `35` | Inafecto - Retiro por premio | 0% | `0` |
+| `36` | Inafecto - Retiro por publicidad | 0% | `0` |
+| `37` | Inafecto - Transferencia gratuita | 0% | `0` |
+| `40` | Exportación de bienes | 0% | `= precio_unitario` |
+
+> **Gratuitos (códigos 11-17, 21, 31-37):** El `precio_unitario` debe ser `0`, pero se envía el valor referencial como `valor_unitario`. Se usa `codigo_tipo_precio: "02"` (valor referencial). Los totales se suman en `total_operaciones_gratuitas` en vez de `total_operaciones_gravadas`.
+
+---
+
 ## Notas para Offline
 
 - Para modo offline, enviar `numero_documento` con el número concreto (ej: `"90"`) en vez de `"#"`.
 - El `external_id` lo genera el backend (UUID). Para idempotencia offline se usa el campo `offline_id` en `sync-batch` (ver [16-idempotencia.md](16-idempotencia.md)).
 - El `filename` tiene constraint UNIQUE en BD: `{RUC}-{tipo_doc}-{serie}-{numero}`. Si se envía un duplicado, el backend retorna error 1062 que `sync-batch` maneja retornando el documento existente.
 - Para ventas al contado: enviar al menos un elemento en `pagos[]`. Para crédito: enviar `cuotas[]`.
+- Para detracciones: Flutter debe calcular `monto = total_venta * porcentaje / 100` y enviar el bloque `detraccion{}` completo.
+- Para retención IGV: Flutter calcula `amount = total_venta * igv_retention_percentage / 100` y envía `retencion{}`.
+- Contingencia: usar series que empiecen con `0`. Se registran previamente en la web → Establecimientos.
+- Factura sin enviar: agregar `acciones.enviar_xml_firmado: false`. Se puede enviar a SUNAT después con `POST /api/documents/send`.
+- Para detracciones: Flutter debe calcular `monto = total_venta * porcentaje / 100` y enviar el bloque `detraccion{}` completo.
+- Para retención IGV: Flutter calcula `amount = total_venta * igv_retention_percentage / 100` y envía `retencion{}`.
+- Contingencia: usar series que empiecen con `0`. Se registran previamente en la web → Establecimientos.
+- Factura sin enviar: agregar `acciones.enviar_xml_firmado: false`. Se puede enviar a SUNAT después con `POST /api/documents/send`.
