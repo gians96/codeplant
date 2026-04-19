@@ -12,6 +12,8 @@
 
 La guía de remisión del transportista la emite la **empresa de transporte** que traslada los bienes. A diferencia de la guía del remitente, incluye datos del remitente y destinatario como terceros, y puede tener vehículos secundarios.
 
+> 📘 Ver tabla comparativa con guía remitente en [13-guia-remision-remitente.md](13-guia-remision-remitente.md#diferencia-con-guía-del-transportista).
+
 ---
 
 ## Payload

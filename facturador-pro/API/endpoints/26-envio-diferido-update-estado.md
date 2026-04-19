@@ -13,6 +13,18 @@ Cuando se crea un documento con `acciones.enviar_xml_firmado: false`, el documen
 
 Ref detalle: [09-boleta-factura.md](09-boleta-factura.md) → sección "Factura Sin Enviar a SUNAT".
 
+### Envío Diferido vs Contingencia
+
+| Aspecto | Envío Diferido (**este doc**) | Contingencia ([27](27-contingencia.md)) |
+|---------|-------------------------------|-----------------------------------------|
+| Cuándo usar | Hay conexión pero se decide **postergar** el envío a SUNAT | **No hay** conexión o SUNAT caído al momento de emitir |
+| Serie usada | Serie **regular** (`F001`, `B001`) | Serie de **contingencia** (empieza con `0`: `0001`, `0F01`) |
+| Creación del doc | `acciones.enviar_xml_firmado: false` | Payload idéntico a factura normal pero con serie de contingencia |
+| Estado inicial SUNAT | `01` (Registrado) | `01` (Registrado) |
+| Acción posterior | `POST /api/documents/send` para enviar a SUNAT | Mismo: `POST /api/documents/send` dentro del plazo de 7 días |
+| Plazo SUNAT | Sin plazo estricto (mientras no se declare el período) | **7 días calendario** desde emisión |
+| Validez legal | Válido al momento del envío | Válido desde la emisión (serie de contingencia habilitada) |
+
 ---
 
 ## 1. Enviar Documento a SUNAT

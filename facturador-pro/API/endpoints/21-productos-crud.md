@@ -9,10 +9,11 @@
 
 Endpoints para gestionar productos/ítems. Son necesarios para que Flutter pueda:
 
-1. **Descargar** el catálogo de productos (ya documentado en [03-items-categorias.md](03-items-categorias.md))
+1. **Descargar / Buscar** el catálogo de productos vía `GET /api/document/search-items` (**ruta canónica**)
 2. **Registrar** nuevos productos desde la app
 3. **Editar** productos existentes
-4. **Buscar** productos por código interno o descripción
+
+> ℹ️ El documento [03-items-categorias.md](03-items-categorias.md) describe los endpoints legacy `/api/sellnow/items` y `/api/sellnow/categories`. Ambos retornan el catálogo pero **`search-items` es la ruta oficial** para nuevas integraciones Flutter.
 
 ---
 

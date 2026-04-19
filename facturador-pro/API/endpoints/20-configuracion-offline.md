@@ -80,8 +80,9 @@ Retorna catálogos necesarios para crear guías de remisión:
 
 ## 4. Búsqueda de Items (con internet)
 
-> `GET /api/sellnow/search-items?input={query}`  
-> **Controller:** `Tenant\Api\SellnowController@searchItems`
+> ⚠️ **Ruta canónica:** `GET /api/document/search-items?input={query}` — ver [21-productos-crud.md](21-productos-crud.md).
+>
+> La ruta legacy `GET /api/sellnow/search-items?input={query}` (Controller `Tenant\Api\SellnowController@searchItems`) se mantiene por compatibilidad pero **no debe usarse en nuevas integraciones**.
 
 Busca items por nombre, código interno o código de barras. Útil para refrescar catálogo parcial cuando hay internet.
 
@@ -106,7 +107,7 @@ Para impresión offline (antes de sincronizar), Flutter debe generar el ticket l
 |---|----------|------------|
 | 1 | `POST /api/login` | [01-autenticacion.md](01-autenticacion.md) |
 | 2 | `GET /api/company` | [02-datos-empresa.md](02-datos-empresa.md) |
-| 3 | `GET /api/sellnow/items` | [03-items-categorias.md](03-items-categorias.md) |
+| 3 | `GET /api/document/search-items` ⭐ | [21-productos-crud.md](21-productos-crud.md) (canónico) · legacy: [03](03-items-categorias.md) |
 | 4 | `GET /api/sellnow/categories` | [03-items-categorias.md](03-items-categorias.md) |
 | 5 | `GET /api/offline/series-numbering` | [04-series-numeracion.md](04-series-numeracion.md) |
 | 6 | `GET /api/pro8/catalogs/ubigeo` | [05-ubigeo.md](05-ubigeo.md) |

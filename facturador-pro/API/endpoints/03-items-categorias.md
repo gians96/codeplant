@@ -2,9 +2,11 @@
 
 > **Uso offline:** Descarga el catálogo de productos filtrado por la sucursal (warehouse) del usuario autenticado.
 
+> ⚠️ **Ruta canónica:** Para descarga inicial y búsqueda en producción usar `GET /api/document/search-items` (ver [21-productos-crud.md](21-productos-crud.md)). Los endpoints `/api/sellnow/items` y `/api/sellnow/categories` de este documento se mantienen por compatibilidad con clientes legacy; **nuevas integraciones deben usar `search-items`**.
+
 ---
 
-## 1. Obtener Items
+## 1. Obtener Items (legacy)
 
 > `GET /api/sellnow/items`  
 > **Controller:** `Tenant\Api\SellnowController@items`  

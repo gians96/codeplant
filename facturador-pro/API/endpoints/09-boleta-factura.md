@@ -1417,6 +1417,136 @@ El campo `codigo_tipo_afectacion_igv` determina el tratamiento tributario de cad
 
 ---
 
+## Extensiones por Giro de Negocio
+
+Cuando algún giro de negocio está activo (ver [28-giros-de-negocio.md](28-giros-de-negocio.md)), el payload acepta bloques adicionales opcionales:
+
+### Grifo — `numero_de_placa` + atributo `7000`
+
+```json
+{
+    "numero_de_placa": "ABC-123",
+    "items": [
+        {
+            "codigo_interno": "COMB-95",
+            "unidad_de_medida": "GLN",
+            "datos_adicionales": [
+                {
+                    "codigo": "7000",
+                    "descripcion": "Gastos Art. 37 Renta: Número de Placa",
+                    "valor": "ABC-123"
+                }
+            ]
+        }
+    ]
+}
+```
+
+Detalle completo: [29-grifo-placas.md](29-grifo-placas.md).
+
+### Farmacia — Lotes `IdLoteSelected`
+
+```json
+{
+    "items": [
+        {
+            "codigo_interno": "MED-001",
+            "cantidad": 5,
+            "IdLoteSelected": 102
+        },
+        {
+            "codigo_interno": "MED-002",
+            "cantidad": 60,
+            "IdLoteSelected": [
+                { "id": 102, "compromise_quantity": 50 },
+                { "id": 101, "compromise_quantity": 10 }
+            ]
+        }
+    ]
+}
+```
+
+Detalle completo: [30-lotes-series-farmacia.md](30-lotes-series-farmacia.md).
+
+### Series (electrónicos) — `lots[]`
+
+```json
+{
+    "items": [
+        {
+            "codigo_interno": "CEL-001",
+            "cantidad": 1,
+            "lots": [
+                { "id": 50, "series": "IMEI-123456789012345", "has_sale": true }
+            ]
+        }
+    ]
+}
+```
+
+### Hotel — Bloque `hotel{}`
+
+```json
+{
+    "hotel": {
+        "number": "12345678",
+        "name": "GARCÍA LÓPEZ MARÍA",
+        "identity_document_type_id": "1",
+        "sex": "F",
+        "age": 35,
+        "civil_status": "C",
+        "nacionality": "PERUANA",
+        "origin": "LIMA",
+        "room_number": "301",
+        "date_entry": "2026-04-18",
+        "time_entry": "14:00:00",
+        "date_exit": "2026-04-20",
+        "time_exit": "12:00:00",
+        "ocupation": "INGENIERA",
+        "room_type": "matrimonial",
+        "guests": []
+    },
+    "hotel_data_persons": [
+        { "number": "12345678", "name": "GARCÍA LÓPEZ MARÍA" }
+    ]
+}
+```
+
+Detalle completo: [31-hotel-transporte-restaurante.md](31-hotel-transporte-restaurante.md).
+
+### Transporte — Bloque `transport{}`
+
+```json
+{
+    "transport": {
+        "seat_number": "15A",
+        "passenger_manifest": "MAN-2026-001",
+        "identity_document_type_id": "1",
+        "number_identity_document": "12345678",
+        "passenger_fullname": "PÉREZ GARCÍA JUAN",
+        "origin_district_id": ["15", "1501", "150101"],
+        "origin_address": "Terminal Terrestre Lima",
+        "destinatation_district_id": ["04", "0401", "040101"],
+        "destinatation_address": "Terminal Terrestre Arequipa",
+        "start_date": "2026-04-20",
+        "start_time": "08:00:00"
+    }
+}
+```
+
+### Restaurante — Propina
+
+```json
+{
+    "worker_full_name_tips": "CARLOS MOZO",
+    "total_tips": 15.00
+}
+```
+
+La propina NO se suma al `total_venta`. Es un registro informativo en la tabla `tips`.
+
+---
+
 ## Notas para Offline
 
 - Para modo offline, enviar `numero_documento` con el número concreto (ej: `"90"`) en vez de `"#"`.
@@ -1427,7 +1557,4 @@ El campo `codigo_tipo_afectacion_igv` determina el tratamiento tributario de cad
 - Para retención IGV: Flutter calcula `amount = total_venta * igv_retention_percentage / 100` y envía `retencion{}`.
 - Contingencia: usar series que empiecen con `0`. Se registran previamente en la web → Establecimientos.
 - Factura sin enviar: agregar `acciones.enviar_xml_firmado: false`. Se puede enviar a SUNAT después con `POST /api/documents/send`.
-- Para detracciones: Flutter debe calcular `monto = total_venta * porcentaje / 100` y enviar el bloque `detraccion{}` completo.
-- Para retención IGV: Flutter calcula `amount = total_venta * igv_retention_percentage / 100` y envía `retencion{}`.
-- Contingencia: usar series que empiecen con `0`. Se registran previamente en la web → Establecimientos.
-- Factura sin enviar: agregar `acciones.enviar_xml_firmado: false`. Se puede enviar a SUNAT después con `POST /api/documents/send`.
+- **Giros de negocio:** Si `is_pharmacy`, descontar lotes FEFO localmente. Si grifo, agregar atributo `7000` a cada item. Si hotel/transporte, agregar bloque `hotel{}`/`transport{}`. Ver [28-giros-de-negocio.md](28-giros-de-negocio.md).

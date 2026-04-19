@@ -12,6 +12,14 @@
 
 La nota de débito se emite para **incrementar el valor** de una factura o boleta previamente emitida (intereses, penalidades, gastos adicionales). Usa el **mismo endpoint** que facturas/boletas con `codigo_tipo_documento: "08"`.
 
+> 📘 **Estructura común:** El payload completo (cliente, items, totales, idempotencia, acciones, respuesta, etc.) es **idéntico** al de factura/boleta. Ver [09-boleta-factura.md](09-boleta-factura.md) como referencia canónica.
+>
+> Este documento sólo describe los **campos específicos** de nota de débito:
+> - `codigo_tipo_documento`: `"08"`
+> - `codigo_tipo_nota`: catálogo 10 SUNAT (01 = intereses por mora, 02 = aumento en el valor, 03 = penalidades, etc.)
+> - `motivo_o_sustento_de_nota`: texto libre
+> - `documento_afectado.external_id`: UUID del documento original
+
 ---
 
 ## Payload

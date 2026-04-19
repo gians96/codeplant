@@ -127,6 +127,18 @@ Este documento describe el contrato de API para la aplicación offline del Factu
 | 26 | [Envío Diferido y Update Estado](endpoints/26-envio-diferido-update-estado.md) | `POST /api/documents/send`, `POST /api/documents/updatedocumentstatus` |
 | 27 | [Contingencia](endpoints/27-contingencia.md) | Series `0xxx`, flujo contingencia desde Flutter |
 
+### Fase 6 — Giros de Negocio (Multi-vertical)
+
+| # | Documento | Endpoint / Tema |
+|---|-----------|-----------------|
+| 28 | [Giros de Negocio](endpoints/28-giros-de-negocio.md) | `GET /api/offline/business-turns` (detección hotel/transport/restaurant/grifo/farmacia) |
+| 29 | [Grifo: Placas](endpoints/29-grifo-placas.md) | `numero_de_placa`, atributo `7000`, `GET/POST /api/offline/plates/{person_id}` |
+| 30 | [Lotes, Series y DIGEMID](endpoints/30-lotes-series-farmacia.md) | `GET /api/offline/item-lots-group`, `IdLoteSelected`, FEFO |
+| 31 | [Hotel, Transporte y Restaurante](endpoints/31-hotel-transporte-restaurante.md) | Bloques `hotel{}`, `transport{}`, `worker_full_name_tips` en payload |
+| 32 | [POS Farmacia Flutter](endpoints/32-pos-farmacia-flutter.md) | Diseño funcional, flujos, arquitectura offline-first |
+| 33 | [Validación Contrato Offline](endpoints/33-validacion-contrato-offline.md) | 4 invariantes: series-por-usuario, items-por-establecimiento, idempotencia, stock/lotes-por-warehouse |
+| 34 | [Lista de Precios por Item](endpoints/34-lista-de-precios-items.md) | `item_unit_types[]` + flag `select_available_price_list` |
+
 ---
 
 ## Autenticación

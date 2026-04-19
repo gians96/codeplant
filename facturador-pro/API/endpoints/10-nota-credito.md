@@ -12,6 +12,14 @@
 
 La nota de crédito se emite para **anular o corregir** una factura o boleta previamente emitida. Se crea a través del **mismo endpoint** que facturas/boletas, pero con `codigo_tipo_documento: "07"` y campos adicionales para referenciar el documento afectado.
 
+> 📘 **Estructura común:** El payload completo (cliente, items, totales, idempotencia, acciones, respuesta, etc.) es **idéntico** al de factura/boleta. Ver [09-boleta-factura.md](09-boleta-factura.md) como referencia canónica.
+>
+> Este documento sólo describe los **campos específicos** de nota de crédito:
+> - `codigo_tipo_documento`: `"07"`
+> - `codigo_tipo_nota`: catálogo 09 SUNAT (01 = anulación, 02 = anulación por error en RUC, 03 = corrección descripción, etc.)
+> - `motivo_o_sustento_de_nota`: texto libre
+> - `documento_afectado.external_id`: UUID del documento original
+
 ---
 
 ## Payload

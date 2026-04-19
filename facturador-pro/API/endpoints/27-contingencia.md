@@ -13,6 +13,8 @@ Los comprobantes de contingencia son documentos electrónicos que se emiten cuan
 2. Se envíen a SUNAT dentro del plazo permitido (7 días calendario)
 3. Se declare el motivo de contingencia
 
+> 📘 Ver tabla comparativa con **Envío Diferido** en [26-envio-diferido-update-estado.md](26-envio-diferido-update-estado.md#envío-diferido-vs-contingencia).
+
 ---
 
 ## Requisito Previo: Series de Contingencia

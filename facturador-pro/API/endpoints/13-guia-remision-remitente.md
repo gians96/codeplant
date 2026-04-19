@@ -12,6 +12,18 @@
 
 La guía de remisión del remitente documenta el **traslado de bienes** desde un punto de partida hasta un destino. Se emite cuando la empresa es quien envía la mercadería.
 
+### Diferencia con Guía del Transportista
+
+| Aspecto | Guía Remitente (**este doc**) | Guía Transportista ([14](14-guia-remision-transportista.md)) |
+|---------|-------------------------------|--------------------------------------------------------------|
+| Código tipo SUNAT | `09` | `31` |
+| Endpoint | `POST /api/dispatches` | `POST /api/dispatch-carrier` |
+| Emite | La empresa que **envía** la mercadería | La empresa de **transporte** contratada |
+| Serie típica | `T001` | `V001` |
+| Cliente / receptor | Destinatario final | Destinatario final (el remitente original va como dato extra) |
+| Vehículos secundarios | No requeridos | Sí, puede llevar varios |
+| Motivo traslado | Venta, compra, traslado entre almacenes, etc. | Traslado por encargo de terceros |
+
 ---
 
 ## Payload
