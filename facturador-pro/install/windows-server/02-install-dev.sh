@@ -28,17 +28,29 @@ echo "============================================"
 echo ""
 
 # ─── Verificar Docker ─────────────────────────────────────────
+# En WSL2 con Docker Desktop, el cliente puede heredar el contexto
+# 'desktop-linux' (endpoint npipe de Windows), que rompe dentro de Linux
+# con: "Failed to initialize: protocol not available" o panic del CLI.
+# Fix: forzar contexto 'default' que apunta a unix:///var/run/docker.sock.
 if ! docker info >/dev/null 2>&1; then
-    echo "Docker no esta corriendo. Intentando iniciar..."
-    sudo service docker start
-    sleep 3
+    echo "Docker no responde. Probando arreglo de contexto WSL..."
+    docker context use default >/dev/null 2>&1 || true
+    sleep 1
     if ! docker info >/dev/null 2>&1; then
-        echo "ERROR: No se pudo iniciar Docker."
-        echo "Ejecuta: sudo service docker start"
-        exit 1
+        echo "Docker no esta corriendo. Intentando iniciar servicio nativo..."
+        sudo service docker start 2>/dev/null || true
+        sleep 3
+        if ! docker info >/dev/null 2>&1; then
+            echo "ERROR: No se pudo conectar con Docker."
+            echo "  - Si usas Docker Desktop: activa WSL Integration para Ubuntu-24.04"
+            echo "    (Settings > Resources > WSL Integration) y reinicia Docker Desktop."
+            echo "  - Si usas Docker Engine nativo: sudo service docker start"
+            echo "  - Luego en WSL: docker context use default"
+            exit 1
+        fi
     fi
 fi
-echo "Docker OK"
+echo "Docker OK (contexto: $(docker context show 2>/dev/null || echo default))"
 
 # ─── Rama (opcional) ──────────────────────────────────────────
 read -p "Rama a clonar [$BRANCH]: " input_branch
@@ -68,6 +80,28 @@ echo "Ejecutando local-setup.sh (levanta 6 containers)..."
 echo ""
 cd "$PROJECT_DEST"
 bash scripts/local-setup.sh
+
+# ─── Corregir permisos de storage y bootstrap/cache ──────────
+# El repo ya trae la estructura de carpetas (storage/app, storage/framework/*,
+# storage/logs, storage/app/tenancy/tenants, etc.) con sus .gitignore.
+# El problema es que al ejecutar comandos artisan dentro del contenedor como
+# root, Laravel puede crear subdirectorios (ej: storage/framework/cache/data)
+# con owner root y permisos 700, pero el worker php-fpm corre como www-data
+# y no puede escribir ahi. Sintomas:
+#   - "file_put_contents(.../storage/framework/views/XXX.php): Permission denied"
+#   - "Unable to create a directory at /var/www/html/storage/app/tenancy/tenants"
+# Fix: forzar ownership a www-data y modo 775 en todo storage y bootstrap/cache.
+echo ""
+echo "Corrigiendo permisos de storage y bootstrap/cache..."
+if docker ps --format '{{.Names}}' | grep -q '^fpm_pro8_local$'; then
+    docker exec fpm_pro8_local bash -c '
+        chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache &&
+        chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache &&
+        find /var/www/html/storage/framework/views -type f -delete 2>/dev/null || true
+    ' && echo "Permisos OK" || echo "ADVERTENCIA: no se pudo ajustar permisos"
+else
+    echo "ADVERTENCIA: contenedor fpm_pro8_local no esta corriendo, omito fix de permisos"
+fi
 
 # ─── Generar data-config.txt fuera del proyecto ──────────────
 DATA_CONFIG="$(dirname $PROJECT_DEST)/pro-8-dev.txt"

@@ -71,13 +71,24 @@ if ! grep -qi microsoft /proc/version 2>/dev/null; then
 fi
 
 # ─── Verificar Docker ─────────────────────────────────────────
+# En WSL2 con Docker Desktop, el cliente puede heredar el contexto
+# 'desktop-linux' (endpoint npipe de Windows), que rompe dentro de Linux
+# con: "Failed to initialize: protocol not available" o panic del CLI.
+# Fix: forzar contexto 'default' que apunta a unix:///var/run/docker.sock.
 if ! docker info >/dev/null 2>&1; then
-    echo "Docker no esta corriendo. Intentando iniciar..."
-    sudo service docker start
+    echo "Docker no responde. Probando arreglo de contexto WSL..."
+    docker context use default >/dev/null 2>&1 || true
+    sleep 1
+fi
+if ! docker info >/dev/null 2>&1; then
+    echo "Docker no esta corriendo. Intentando iniciar servicio nativo..."
+    sudo service docker start 2>/dev/null || true
     sleep 3
     if ! docker info >/dev/null 2>&1; then
-        echo "ERROR: No se pudo iniciar Docker."
-        echo "Ejecuta: sudo service docker start"
+        echo "ERROR: No se pudo conectar con Docker."
+        echo "  - Si usas Docker Desktop: activa WSL Integration y reinicia Docker Desktop"
+        echo "  - Si usas Docker Engine nativo: sudo service docker start"
+        echo "  - Luego en WSL: docker context use default"
         exit 1
     fi
 fi
@@ -589,6 +600,9 @@ EOFMYCNF
     docker compose exec -T fpm_$SERVICE_NUMBER sh -c "cd /var/www/html && composer dump-autoload --classmap-authoritative 2>&1" | tail -1
 
     # ─── Permisos ────────────────────────────────────────────
+    # El repo ya trae storage/app/tenancy/tenants y demas subcarpetas.
+    # El chmod -R 777 garantiza que tanto root (comandos artisan) como
+    # www-data (worker php-fpm) puedan escribir en todo storage.
     echo "Configurando permisos"
     chmod -R 777 "$PATH_INSTALL/$DIR/storage/" "$PATH_INSTALL/$DIR/bootstrap/"
     if [ -d "$PATH_INSTALL/$DIR/vendor/" ]; then
