@@ -113,14 +113,33 @@ docker compose logs -f
 
 ### Actualizar código (producción)
 
+**Opción A — script todo-en-uno (recomendado):**
+
+```bash
+cd ~/proyectos/mi-empresa.com
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/03-update.sh
+chmod +x 03-update.sh
+./03-update.sh prod
+```
+
+El script ejecuta en orden: `git pull` → `composer install` → **`composer dump-autoload -o`** (clave para detectar controllers/módulos nuevos) → `module:discover` → `migrate` + `tenancy:migrate` → `route:clear` / `config:clear` / `cache:clear` → `config:cache` → purga OPcache (`kill -USR2 1`) → reinicia colas.
+
+> Si alguna vez ves `"Target class [Modules\Offline\Http\Controllers\XxxController] does not exist"` es porque el autoloader de Composer está desactualizado. El paso `composer dump-autoload -o` del script lo arregla.
+
+**Opción B — comandos manuales:**
+
 ```bash
 cd ~/proyectos/mi-empresa.com
 git pull origin master
 docker compose exec -T fpm_1 sh -c "cd /var/www/html && CACHE_DRIVER=file composer install --no-dev --optimize-autoloader"
+docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer dump-autoload -o"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan module:discover"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan migrate --force"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan tenancy:migrate --force"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan route:clear"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:cache"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan cache:clear"
+docker compose exec -T fpm_1 sh -c "kill -USR2 1"   # purga OPcache
 docker compose exec -T supervisor_1 supervisorctl restart all
 ```
 
