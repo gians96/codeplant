@@ -52,6 +52,25 @@ if ! docker info >/dev/null 2>&1; then
 fi
 echo "Docker OK (contexto: $(docker context show 2>/dev/null || echo default))"
 
+# ─── Instalar Bun (runtime/bundler JS) ────────────────────────
+# Se usa para compilar assets con Vite (bun run build) sin depender del
+# Node.js de Windows (que en WSL no funciona para node-gyp/esbuild nativos).
+# Idempotente: si ya existe, se omite.
+if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.bun/bin/bun" ]; then
+    echo "Instalando Bun..."
+    # unzip es requisito del instalador oficial
+    if ! command -v unzip >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y unzip >/dev/null
+    fi
+    curl -fsSL https://bun.sh/install | bash >/dev/null
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    echo "Bun instalado: $(bun --version)"
+else
+    export PATH="$HOME/.bun/bin:$PATH"
+    echo "Bun ya instalado: $(bun --version 2>/dev/null || echo 'n/d')"
+fi
+
 # ─── Rama (opcional) ──────────────────────────────────────────
 read -p "Rama a clonar [$BRANCH]: " input_branch
 if [ ! -z "$input_branch" ]; then
@@ -80,6 +99,18 @@ echo "Ejecutando local-setup.sh (levanta 6 containers)..."
 echo ""
 cd "$PROJECT_DEST"
 bash scripts/local-setup.sh
+
+# ─── Compilar assets con Bun (Vite) ──────────────────────────
+# canvas (dependencia transitiva) necesita libs nativas para compilar.
+# Para evitar fallos en entornos sin build-tools, se usa --ignore-scripts.
+# Luego 'bun run build' genera public/build/* requerido por el layout.
+echo ""
+echo "Instalando dependencias JS con Bun (--ignore-scripts)..."
+cd "$PROJECT_DEST"
+bun install --ignore-scripts
+
+echo "Compilando assets (vite build)..."
+bun run build || echo "ADVERTENCIA: falló el build de assets; revisa errores arriba"
 
 # ─── Corregir permisos de storage y bootstrap/cache ──────────
 # El repo ya trae la estructura de carpetas (storage/app, storage/framework/*,
