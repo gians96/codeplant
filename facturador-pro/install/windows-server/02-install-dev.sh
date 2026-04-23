@@ -134,6 +134,47 @@ else
     echo "ADVERTENCIA: contenedor fpm_pro8_local no esta corriendo, omito fix de permisos"
 fi
 
+# ─── Instalar alias pro8up (reinicio seguro tras reboot en WSL2) ──
+# En WSL2, tras reiniciar el PC, Docker Desktop puede levantar los contenedores
+# (restart: unless-stopped) ANTES de que WSL monte $HOME. El bind mount
+# /home/$USER/proyectos/pro-8 → /var/www/html queda apuntando a un directorio
+# vacio y nginx devuelve 404 aunque todo figure healthy.
+# 'pro8up' hace `compose down && up -d` para re-montar una vez listo el FS.
+# Idempotente: no duplica si ya existe.
+BASHRC="${HOME}/.bashrc"
+RESTART_SCRIPT="${PROJECT_DEST}/scripts/pro8-restart.sh"
+if [ -f "$RESTART_SCRIPT" ]; then
+    chmod +x "$RESTART_SCRIPT" 2>/dev/null || true
+    if [ -f "$BASHRC" ] && ! grep -q "alias pro8up=" "$BASHRC"; then
+        {
+            echo ""
+            echo "# pro-8: reinicio seguro del stack tras reboot (WSL2 + Docker Desktop)"
+            echo "alias pro8up='bash ${RESTART_SCRIPT}'"
+        } >> "$BASHRC"
+        echo "Alias 'pro8up' instalado en ~/.bashrc"
+    fi
+fi
+
+# ─── Arranque automatico tras reboot (systemd) ──────────────
+# Registra un servicio systemd que recrea el stack cuando WSL arranca.
+# Idempotente: no reinstala si ya existe el unit.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+AUTOSTART_SRC="$SCRIPT_DIR/enable-autostart.sh"
+if [ ! -f /etc/systemd/system/pro8-autostart.service ]; then
+    if [ ! -f "$AUTOSTART_SRC" ]; then
+        curl -fsSL -o /tmp/enable-autostart.sh \
+            "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/enable-autostart.sh" \
+            2>/dev/null && AUTOSTART_SRC=/tmp/enable-autostart.sh
+    fi
+    if [ -f "$AUTOSTART_SRC" ]; then
+        echo "Configurando arranque automatico del stack (systemd, requiere sudo)..."
+        sudo SUDO_USER="${USER}" bash "$AUTOSTART_SRC" || \
+            echo "ADVERTENCIA: no se pudo activar el arranque automatico. Puedes hacerlo manualmente con: sudo bash $AUTOSTART_SRC"
+    fi
+else
+    echo "✓ Arranque automatico ya configurado (pro8-autostart.service)"
+fi
+
 # ─── Generar data-config.txt fuera del proyecto ──────────────
 DATA_CONFIG="$(dirname $PROJECT_DEST)/pro-8-dev.txt"
 cat << EOF > $DATA_CONFIG
@@ -204,4 +245,7 @@ echo ""
 echo "  Para entrar al proyecto:"
 echo "    wsl"
 echo "    cd $PROJECT_DEST"
+echo ""
+echo "  Tras reiniciar el PC (WSL2), levanta el stack con:"
+echo "    pro8up      # re-abre una terminal WSL para que el alias esté activo"
 echo ""

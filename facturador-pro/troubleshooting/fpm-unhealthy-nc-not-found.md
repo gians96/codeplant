@@ -139,3 +139,45 @@ curl -sI http://localhost:8080/ | head -5
 - Fecha del bug: detectado 2026-04-23 tras reinicio de WSL en entorno dev.
 - Imagen afectada: `docker/php-fpm/Dockerfile` basada en `php:8.2-fpm`.
 - FPM escucha en `[::]:9000` (IPv6) por `listen = 9000` en `zz-docker.conf`.
+
+---
+
+# Bonus: bind mount vacío en nginx tras reinicio (WSL2 + Docker Desktop)
+
+## Síntomas
+
+- Tras reiniciar el PC, los contenedores están `healthy` pero nginx responde **404 Not Found**.
+- `docker exec nginx_pro8_local ls /var/www/html/public/` → *No such file or directory*.
+- `docker exec nginx_pro8_local ls -la /var/www/html/` → solo `.` y `..` (vacío).
+- En el host, `ls /home/gg/proyectos/pro-8/public/` muestra todos los archivos correctamente.
+- `docker inspect` confirma el bind: `bind /home/gg/proyectos/pro-8 -> /var/www/html`.
+
+## Causa
+
+Con `restart: always` + Docker Desktop iniciando al arrancar Windows, Docker
+levanta los contenedores **antes de que WSL haya montado `$HOME`**. Docker
+encuentra la ruta inexistente, la crea como directorio vacío en el host de
+Docker y bindea ese directorio vacío dentro del contenedor. Cuando WSL expone
+los archivos reales segundos después, el mount del contenedor ya quedó
+"congelado" apuntando al vacío.
+
+## Solución
+
+Recrear los contenedores una vez que el filesystem del host esté disponible:
+
+```bash
+cd ~/proyectos/pro-8
+docker compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml up -d
+```
+
+## Prevención
+
+- **Opción A**: Desactivar el autoinicio de Docker Desktop en Windows y
+  levantarlo manualmente después de login.
+- **Opción B**: Alias en `~/.bashrc` de WSL para recrear el stack post-reboot:
+  ```bash
+  alias pro8up='cd ~/proyectos/pro-8 && docker compose -f docker-compose.local.yml down && docker compose -f docker-compose.local.yml up -d'
+  ```
+- **Opción C**: Cambiar `restart: always` → `restart: unless-stopped` y detener
+  el stack con `down` antes de apagar el PC.

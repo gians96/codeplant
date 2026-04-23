@@ -622,6 +622,57 @@ EOFMYCNF
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl update 2>/dev/null || true
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl start all 2>/dev/null || true
 
+    # ─── Instalar pro8up (reinicio seguro del stack tras reboot WSL2) ──
+    # En WSL2 + Docker Desktop, tras reiniciar Windows los contenedores
+    # pueden levantar (restart: always) ANTES de que WSL monte $HOME.
+    # El bind mount ./ → /var/www/html queda apuntando a un directorio
+    # vacio y nginx devuelve 404/502 para todos los dominios.
+    # 'pro8up' hace `compose down && up -d` de proxy + todos los proyectos
+    # una vez que el filesystem ya esta disponible. Idempotente.
+    RESTART_SCRIPT="$PATH_INSTALL/pro8-prod-restart.sh"
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    SOURCE_RESTART="$SCRIPT_DIR/pro8-prod-restart.sh"
+    if [ -f "$SOURCE_RESTART" ]; then
+        cp "$SOURCE_RESTART" "$RESTART_SCRIPT"
+    else
+        # Fallback: descargar del repo (cuando el script se ejecuta con curl)
+        curl -fsSL -o "$RESTART_SCRIPT" \
+            "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/pro8-prod-restart.sh" \
+            2>/dev/null || true
+    fi
+    if [ -f "$RESTART_SCRIPT" ]; then
+        chmod +x "$RESTART_SCRIPT"
+        BASHRC="${HOME}/.bashrc"
+        if [ -f "$BASHRC" ] && ! grep -q "alias pro8up=" "$BASHRC"; then
+            {
+                echo ""
+                echo "# pro-8: reinicio seguro del stack tras reboot (WSL2 + Docker Desktop)"
+                echo "alias pro8up='bash ${RESTART_SCRIPT}'"
+            } >> "$BASHRC"
+            echo "Alias 'pro8up' instalado en ~/.bashrc"
+        fi
+    fi
+
+    # ─── Arranque automatico (systemd) ──────────────────────
+    # Instala /etc/systemd/system/pro8-autostart.service para recrear el
+    # stack despues de cada reinicio de Windows. Idempotente: no reinstala
+    # si ya existe el unit.
+    AUTOSTART_SRC="$SCRIPT_DIR/enable-autostart.sh"
+    if [ ! -f /etc/systemd/system/pro8-autostart.service ]; then
+        if [ ! -f "$AUTOSTART_SRC" ]; then
+            curl -fsSL -o /tmp/enable-autostart.sh \
+                "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/enable-autostart.sh" \
+                2>/dev/null && AUTOSTART_SRC=/tmp/enable-autostart.sh
+        fi
+        if [ -f "$AUTOSTART_SRC" ]; then
+            echo "Configurando arranque automatico del stack (systemd)..."
+            SUDO_USER="${SUDO_USER:-$(whoami)}" bash "$AUTOSTART_SRC" || \
+                echo "ADVERTENCIA: no se pudo activar el arranque automatico (continuo sin abortar)"
+        fi
+    else
+        echo "✓ Arranque automatico ya configurado (pro8-autostart.service)"
+    fi
+
     # ─── SSL ─────────────────────────────────────────────────
     read -p "Instalar SSL gratuito? si[s] no[n]: " ssl
     if [ "$ssl" = "s" ]; then
@@ -724,6 +775,11 @@ Para entrar al proyecto:
 Para levantar/reiniciar:
   cd $PATH_INSTALL/$DIR
   docker compose up -d
+
+Tras reiniciar el PC (WSL2): ejecuta en una terminal WSL nueva:
+  pro8up
+Esto recrea proxy + todos los proyectos para que los bind mounts
+se re-resuelvan contra el filesystem ya montado.
 EOF
 
     echo ""
