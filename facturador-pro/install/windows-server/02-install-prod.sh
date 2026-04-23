@@ -326,7 +326,7 @@ services:
             - ./:/var/www/html
         restart: always
         healthcheck:
-            test: ["CMD-SHELL", "kill -0 1 && test -S /var/run/php-fpm.sock || nc -z 127.0.0.1 9000"]
+            test: ["CMD-SHELL", "kill -0 1 2>/dev/null && grep -q ':2328' /proc/net/tcp /proc/net/tcp6 2>/dev/null"]
             interval: 30s
             timeout: 5s
             retries: 3
