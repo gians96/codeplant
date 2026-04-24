@@ -94,21 +94,21 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 # Arrancar el daemon si el servicio esta instalado pero parado
-DOCKER_ERR="$(docker info 2>&1 >/dev/null || true)"
-if [ -n "$DOCKER_ERR" ]; then
+# Nota: capturamos stderr SOLO si el comando falla (exit != 0). docker info
+# imprime warnings a stderr incluso cuando funciona, asi que no sirve basarse
+# solo en "hay texto en stderr".
+if ! DOCKER_ERR="$(docker info 2>&1 >/dev/null)"; then
     # Caso 1: socket existe pero nuestro usuario no puede acceder -> falta
     # aplicar el grupo 'docker' en la sesion actual. Se re-ejecuta con sg.
-    if echo "$DOCKER_ERR" | grep -qi "permission denied.*docker.sock"; then
-        if id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
-            echo "Usuario en grupo 'docker' pero la sesion actual no lo tiene activo."
-            echo "Re-ejecutando con 'sg docker' ..."
-            exec sg docker -c "bash '$0' $*"
-        else
+    if echo "$DOCKER_ERR" | grep -qi "permission denied"; then
+        if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
             echo "Tu usuario no pertenece al grupo 'docker'. Añadiendo..."
             sudo usermod -aG docker "$USER"
-            echo "Re-ejecutando con 'sg docker' ..."
-            exec sg docker -c "bash '$0' $*"
+        else
+            echo "Usuario en grupo 'docker' pero la sesion actual no lo tiene activo."
         fi
+        echo "Re-ejecutando con 'sg docker' ..."
+        exec sg docker -c "bash '$0' $*"
     fi
 
     # Caso 2: daemon parado -> intentar arrancarlo.
@@ -117,6 +117,7 @@ if [ -n "$DOCKER_ERR" ]; then
     sleep 2
     if ! docker info >/dev/null 2>&1; then
         echo "ERROR: no se pudo conectar con el daemon de Docker."
+        echo "  Detalle: $DOCKER_ERR"
         echo "  Verifica con: sudo systemctl status docker"
         echo "  Y que tu usuario pertenezca al grupo docker: groups"
         exit 1
