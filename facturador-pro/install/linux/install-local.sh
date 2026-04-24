@@ -85,15 +85,33 @@ if ! command -v docker >/dev/null 2>&1; then
     sudo SYSTEMD_PAGER=cat sh /tmp/get-docker.sh
     rm -f /tmp/get-docker.sh
     sudo usermod -aG docker "$USER" || true
+    # Asegurar daemon arriba antes de re-ejecutar con el grupo aplicado
+    sudo systemctl enable --now docker 2>/dev/null || sudo service docker start 2>/dev/null || true
     echo ""
-    echo "IMPORTANTE: se añadio '$USER' al grupo docker."
-    echo "  Cierra sesion y vuelve a entrar (o ejecuta 'newgrp docker')"
-    echo "  para que el cambio surta efecto, luego vuelve a correr este script."
-    exit 0
+    echo "Docker instalado. Re-ejecutando script con el grupo 'docker' aplicado..."
+    # sg aplica el grupo en esta misma sesion, sin necesidad de cerrar sesion.
+    exec sg docker -c "bash '$0' $*"
 fi
 
 # Arrancar el daemon si el servicio esta instalado pero parado
-if ! docker info >/dev/null 2>&1; then
+DOCKER_ERR="$(docker info 2>&1 >/dev/null || true)"
+if [ -n "$DOCKER_ERR" ]; then
+    # Caso 1: socket existe pero nuestro usuario no puede acceder -> falta
+    # aplicar el grupo 'docker' en la sesion actual. Se re-ejecuta con sg.
+    if echo "$DOCKER_ERR" | grep -qi "permission denied.*docker.sock"; then
+        if id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
+            echo "Usuario en grupo 'docker' pero la sesion actual no lo tiene activo."
+            echo "Re-ejecutando con 'sg docker' ..."
+            exec sg docker -c "bash '$0' $*"
+        else
+            echo "Tu usuario no pertenece al grupo 'docker'. Añadiendo..."
+            sudo usermod -aG docker "$USER"
+            echo "Re-ejecutando con 'sg docker' ..."
+            exec sg docker -c "bash '$0' $*"
+        fi
+    fi
+
+    # Caso 2: daemon parado -> intentar arrancarlo.
     echo "Docker instalado pero daemon no responde. Intentando arrancar..."
     sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
     sleep 2
