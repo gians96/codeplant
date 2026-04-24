@@ -79,7 +79,11 @@ fi
 # con el script oficial (get.docker.com) y se añade el usuario al grupo.
 if ! command -v docker >/dev/null 2>&1; then
     echo "Docker no encontrado. Instalando con get.docker.com ..."
-    curl -fsSL https://get.docker.com | sudo sh
+    # SYSTEMD_PAGER=cat evita que systemctl abra 'less' al final del instalador
+    # (sintoma tipico: terminal parece colgada mostrando la lista de units).
+    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+    sudo SYSTEMD_PAGER=cat sh /tmp/get-docker.sh
+    rm -f /tmp/get-docker.sh
     sudo usermod -aG docker "$USER" || true
     echo ""
     echo "IMPORTANTE: se añadio '$USER' al grupo docker."
