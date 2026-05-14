@@ -20,6 +20,46 @@ REPO_URL="https://gitlab.com/gians96/pro-8.git"
 BRANCH="master"
 PROJECT_DEST="$HOME/proyectos/pro-8"
 
+ensure_bun() {
+    export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+    case ":$PATH:" in
+        *":$BUN_INSTALL/bin:"*) ;;
+        *) export PATH="$BUN_INSTALL/bin:$PATH" ;;
+    esac
+
+    if command -v bun >/dev/null 2>&1; then
+        echo "Bun OK: $(bun --version)"
+        return 0
+    fi
+
+    if [ -x "$BUN_INSTALL/bin/bun" ]; then
+        echo "Bun OK: $($BUN_INSTALL/bin/bun --version)"
+        return 0
+    fi
+
+    echo "Instalando Bun..."
+    if ! command -v unzip >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y unzip >/dev/null
+    fi
+    if ! command -v curl >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y curl ca-certificates >/dev/null
+    fi
+    curl -fsSL https://bun.sh/install | bash >/dev/null
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    hash -r 2>/dev/null || true
+
+    if [ -f "$HOME/.bashrc" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$HOME/.bashrc"; then
+        {
+            echo ""
+            echo "# Bun runtime/bundler"
+            echo "export BUN_INSTALL=\"\$HOME/.bun\""
+            echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
+        } >> "$HOME/.bashrc"
+    fi
+
+    echo "Bun instalado: $(bun --version)"
+}
+
 echo ""
 echo "============================================"
 echo "  FACTURADOR PRO-8 — Instalacion Desarrollo"
@@ -53,23 +93,8 @@ fi
 echo "Docker OK (contexto: $(docker context show 2>/dev/null || echo default))"
 
 # ─── Instalar Bun (runtime/bundler JS) ────────────────────────
-# Se usa para compilar assets con Vite (bun run build) sin depender del
-# Node.js de Windows (que en WSL no funciona para node-gyp/esbuild nativos).
-# Idempotente: si ya existe, se omite.
-if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.bun/bin/bun" ]; then
-    echo "Instalando Bun..."
-    # unzip es requisito del instalador oficial
-    if ! command -v unzip >/dev/null 2>&1; then
-        sudo apt-get update -qq && sudo apt-get install -y unzip >/dev/null
-    fi
-    curl -fsSL https://bun.sh/install | bash >/dev/null
-    export BUN_INSTALL="$HOME/.bun"
-    export PATH="$BUN_INSTALL/bin:$PATH"
-    echo "Bun instalado: $(bun --version)"
-else
-    export PATH="$HOME/.bun/bin:$PATH"
-    echo "Bun ya instalado: $(bun --version 2>/dev/null || echo 'n/d')"
-fi
+# Se usa para compilar assets con Vite y ejecutar socket-server.js.
+ensure_bun
 
 # ─── Rama (opcional) ──────────────────────────────────────────
 read -p "Rama a clonar [$BRANCH]: " input_branch

@@ -22,6 +22,46 @@ MODE="${1:-prod}"         # prod | dev
 FPM="fpm_1"
 SUPERVISOR="supervisor_1"
 
+ensure_bun() {
+    export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+    case ":$PATH:" in
+        *":$BUN_INSTALL/bin:"*) ;;
+        *) export PATH="$BUN_INSTALL/bin:$PATH" ;;
+    esac
+
+    if command -v bun >/dev/null 2>&1; then
+        echo "Bun OK: $(bun --version)"
+        return 0
+    fi
+
+    if [ -x "$BUN_INSTALL/bin/bun" ]; then
+        echo "Bun OK: $($BUN_INSTALL/bin/bun --version)"
+        return 0
+    fi
+
+    echo "Instalando Bun..."
+    if ! command -v unzip >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y unzip >/dev/null
+    fi
+    if ! command -v curl >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y curl ca-certificates >/dev/null
+    fi
+    curl -fsSL https://bun.sh/install | bash >/dev/null
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    hash -r 2>/dev/null || true
+
+    if [ -f "$HOME/.bashrc" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$HOME/.bashrc"; then
+        {
+            echo ""
+            echo "# Bun runtime/bundler"
+            echo "export BUN_INSTALL=\"\$HOME/.bun\""
+            echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
+        } >> "$HOME/.bashrc"
+    fi
+
+    echo "Bun instalado: $(bun --version)"
+}
+
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo " Pro-8 · Update script ($MODE)"
 echo " $(pwd)"
@@ -46,6 +86,15 @@ if [ "$MODE" = "prod" ]; then
 else
     docker compose exec -T $FPM sh -c "cd /var/www/html && composer install"
 fi
+
+echo "→ 2b/8 Bun + assets JS"
+if [ -f scripts/ensure-bun.sh ]; then
+    source scripts/ensure-bun.sh
+else
+    ensure_bun
+fi
+bun install --ignore-scripts
+bun run build || echo "  ⚠ bun run build falló; revisa errores arriba"
 
 echo "→ 3/8 composer dump-autoload (CLAVE para clases nuevas)"
 docker compose exec -T $FPM sh -c "cd /var/www/html && composer dump-autoload -o"
