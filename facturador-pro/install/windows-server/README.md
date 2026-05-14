@@ -1,12 +1,12 @@
-# Facturador Pro-8 — Instalación en Windows Server (WSL2)
+# Facturador Pro-8 Ã¢â‚¬â€ InstalaciÃƒÂ³n en Windows Server (WSL2)
 
-## ¿Por qué WSL2?
+## Ã‚Â¿Por quÃƒÂ© WSL2?
 
-PHP/Laravel lee miles de archivos por request. En NTFS (C:\) vía 9P, el TTFB es de 4-8 segundos. Con el código en ext4 nativo dentro de WSL, el TTFB es < 1 segundo.
+PHP/Laravel lee miles de archivos por request. En NTFS (C:\) vÃƒÂ­a 9P, el TTFB es de 4-8 segundos. Con el cÃƒÂ³digo en ext4 nativo dentro de WSL, el TTFB es < 1 segundo.
 
 ## Requisitos
 
-| Requisito | Mínimo | Recomendado |
+| Requisito | MÃƒÂ­nimo | Recomendado |
 |-----------|--------|-------------|
 | **OS** | Windows Server 2019+ / Windows 10+ | Windows Server 2022 |
 | **RAM** | 8 GB | 16 GB |
@@ -14,9 +14,9 @@ PHP/Laravel lee miles de archivos por request. En NTFS (C:\) vía 9P, el TTFB es
 | **CPU** | 4 cores (VT-x/AMD-V habilitado) | 8 cores |
 | **Red** | IP fija en LAN | IP fija + dominio |
 
-## Proceso de instalación (2 fases)
+## Proceso de instalaciÃƒÂ³n (2 fases)
 
-### Fase 1 — Preparar entorno (PowerShell como Admin)
+### Fase 1 Ã¢â‚¬â€ Preparar entorno (PowerShell como Admin)
 
 ```powershell
 # Descargar el script
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File 01-setup-wsl.ps1
 ```
 
 Este script:
-1. Verifica virtualización (VT-x/AMD-V)
+1. Verifica virtualizaciÃƒÂ³n (VT-x/AMD-V)
 2. Habilita WSL2 + Virtual Machine Platform
 3. Instala Ubuntu 24.04
 4. Crea usuario seguro (default: `pro8admin`)
@@ -35,16 +35,16 @@ Este script:
 6. Abre puertos en Windows Firewall (80, 443, 8080)
 7. Genera `data-config.txt` con credenciales
 
-**Parámetros opcionales:**
+**ParÃƒÂ¡metros opcionales:**
 ```powershell
 # Usuario personalizado
 powershell -File 01-setup-wsl.ps1 -WslUser "miusuario"
 
-# Forzar reinstalación
+# Forzar reinstalaciÃƒÂ³n
 powershell -File 01-setup-wsl.ps1 -Force
 ```
 
-### Fase 2 — Instalar proyecto (dentro de WSL)
+### Fase 2 Ã¢â‚¬â€ Instalar proyecto (dentro de WSL)
 
 Abrir WSL y descargar el script correspondiente:
 
@@ -52,7 +52,7 @@ Abrir WSL y descargar el script correspondiente:
 wsl
 ```
 
-#### Opción A: Producción (dominio, proxy, SSL)
+#### OpciÃƒÂ³n A: ProducciÃƒÂ³n (dominio, proxy, SSL)
 
 ```bash
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/02-install-prod.sh
@@ -62,21 +62,22 @@ sudo ./02-install-prod.sh
 
 El script pide:
 - **Dominio** (ej: `mi-empresa.com`)
-- **Número de servicio** (1 para primera instalación, 2+ para multi-proyecto)
+- **NÃƒÂºmero de servicio** (1 para primera instalaciÃƒÂ³n, 2+ para multi-proyecto)
 - **Puerto MySQL** (auto-detectado)
 - **SSL** (certbot manual DNS challenge, opcional)
 
 Incluye:
 - Proxy reverso (`rash07/nginx-proxy:4.0`) para soporte multi-proyecto
-- OPcache + JIT para máximo rendimiento
+- OPcache + JIT para mÃƒÂ¡ximo rendimiento
 - MariaDB con tuning optimizado
 - Redis con maxmemory 256MB
+- Soketi para Laravel Broadcasting, publicado por el mismo dominio HTTPS (`wss://DOMINIO/app/...`)
 - Headers de seguridad en nginx
 - Credenciales aleatorias guardadas en `data-config.txt`
 
 **Multi-proyecto:** Ejecutar de nuevo con service number 2, 3, etc. Solo el primer servicio instala el proxy.
 
-#### Opción B: Desarrollo (local, sin proxy ni SSL)
+#### OpciÃƒÂ³n B: Desarrollo (local, sin proxy ni SSL)
 
 ```bash
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/02-install-dev.sh
@@ -89,7 +90,7 @@ chmod +x 02-install-dev.sh
 - App en `http://localhost:8080`
 - MySQL en `localhost:3308` (root / secret)
 
-## Después de la instalación
+## DespuÃƒÂ©s de la instalaciÃƒÂ³n
 
 ### Acceso diario
 
@@ -98,7 +99,7 @@ chmod +x 02-install-dev.sh
 wsl
 
 # Ir al proyecto
-cd ~/proyectos/mi-empresa.com    # producción
+cd ~/proyectos/mi-empresa.com    # producciÃƒÂ³n
 cd ~/proyectos/pro-8             # desarrollo
 
 # Iniciar Docker (si no arranca solo)
@@ -111,9 +112,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### Actualizar código (producción)
+### Actualizar cÃƒÂ³digo (producciÃƒÂ³n)
 
-**Opción A — script todo-en-uno (recomendado):**
+**OpciÃƒÂ³n A Ã¢â‚¬â€ script todo-en-uno (recomendado):**
 
 ```bash
 cd ~/proyectos/mi-empresa.com
@@ -122,11 +123,15 @@ chmod +x 03-update.sh
 ./03-update.sh prod
 ```
 
-El script ejecuta en orden: `git pull` → `composer install` → **`composer dump-autoload -o`** (clave para detectar controllers/módulos nuevos) → `module:discover` → `migrate` + `tenancy:migrate` → `route:clear` / `config:clear` / `cache:clear` → `config:cache` → purga OPcache (`kill -USR2 1`) → reinicia colas.
+El script ejecuta en orden: `git pull` Ã¢â€ â€™ `composer install` Ã¢â€ â€™ **`composer dump-autoload -o`** (clave para detectar controllers/mÃƒÂ³dulos nuevos) Ã¢â€ â€™ `module:discover` Ã¢â€ â€™ `migrate` + `tenancy:migrate` Ã¢â€ â€™ `route:clear` / `config:clear` / `cache:clear` Ã¢â€ â€™ `config:cache` Ã¢â€ â€™ purga OPcache (`kill -USR2 1`) Ã¢â€ â€™ reinicia colas.
 
-> Si alguna vez ves `"Target class [Modules\Offline\Http\Controllers\XxxController] does not exist"` es porque el autoloader de Composer está desactualizado. El paso `composer dump-autoload -o` del script lo arregla.
+TambiÃƒÂ©n normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
 
-**Opción B — comandos manuales:**
+> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
+
+> Si alguna vez ves `"Target class [Modules\Offline\Http\Controllers\XxxController] does not exist"` es porque el autoloader de Composer estÃƒÂ¡ desactualizado. El paso `composer dump-autoload -o` del script lo arregla.
+
+**OpciÃƒÂ³n B Ã¢â‚¬â€ comandos manuales:**
 
 ```bash
 cd ~/proyectos/mi-empresa.com
@@ -141,6 +146,18 @@ docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:cache"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan cache:clear"
 docker compose exec -T fpm_1 sh -c "kill -USR2 1"   # purga OPcache
 docker compose exec -T supervisor_1 supervisorctl restart all
+```
+
+Para instalaciones con VendeMaster/Restaurant, revisa que `.env` tenga:
+
+```env
+BROADCAST_DRIVER=pusher
+PUSHER_HOST=soketi_mi-empresa_com
+PUSHER_PORT=6001
+PUSHER_SCHEME=http
+PUSHER_CLIENT_HOST=mi-empresa.com
+PUSHER_CLIENT_PORT=443
+PUSHER_CLIENT_SCHEME=https
 ```
 
 > **IMPORTANTE:** Todo comando `php artisan` en CLI debe llevar `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
@@ -158,7 +175,7 @@ docker restart $(docker ps --filter "ancestor=rash07/nginx-proxy:4.0" --format "
 
 ## Archivos generados
 
-| Archivo | Ubicación | Propósito |
+| Archivo | UbicaciÃƒÂ³n | PropÃƒÂ³sito |
 |---------|-----------|-----------|
 | `data-config.txt` | Junto al script | Credenciales WSL + proyecto |
 | `DOMINIO.txt` | `~/proyectos/` | Credenciales del proyecto |
@@ -169,15 +186,15 @@ docker restart $(docker ps --filter "ancestor=rash07/nginx-proxy:4.0" --format "
 
 ### ERR_EMPTY_RESPONSE o "File not found"
 
-Si el navegador devuelve respuesta vacía o PHP dice "File not found":
+Si el navegador devuelve respuesta vacÃƒÂ­a o PHP dice "File not found":
 
 ```bash
-# Reconstruir Nginx y PHP-FPM (config ya está dentro de la imagen)
+# Reconstruir Nginx y PHP-FPM (config ya estÃƒÂ¡ dentro de la imagen)
 cd ~/proyectos/mi-empresa.com
 docker compose up -d --build --force-recreate nginx_1 fpm_1
 ```
 
-> La config de Nginx está horneada dentro de la imagen (build-time), **no depende de bind mounts**. Si necesitas cambiar la config, edita `proxy/fpms/DOMINIO/default` y reconstruye con `--build`.
+> La config de Nginx estÃƒÂ¡ horneada dentro de la imagen (build-time), **no depende de bind mounts**. Si necesitas cambiar la config, edita `proxy/fpms/DOMINIO/default` y reconstruye con `--build`.
 
 ### Docker no arranca al reiniciar Windows
 
@@ -189,7 +206,7 @@ cd ~/proyectos/mi-empresa.com && docker compose up -d
 
 ### Healthchecks
 
-Los servicios nginx y fpm tienen healthchecks configurados. Docker los reinicia automáticamente si fallan. Para verificar:
+Los servicios nginx y fpm tienen healthchecks configurados. Docker los reinicia automÃƒÂ¡ticamente si fallan. Para verificar:
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}"

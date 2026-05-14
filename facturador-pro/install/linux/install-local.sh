@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# install-local.sh — Facturador Pro-8: Instalacion de desarrollo LOCAL en Linux
+# install-local.sh  Facturador Pro-8: Instalacion de desarrollo LOCAL en Linux
 #
 # Equivalente a windows-server/02-install-dev.sh pero para Linux nativo
 # (Ubuntu / Debian / derivados). Sin WSL, sin Docker Desktop.
@@ -14,7 +14,7 @@
 #   1. Verifica/instala prerequisitos (git, curl, unzip, Docker Engine)
 #   2. Instala Bun (runtime/bundler JS para Vite)
 #   3. Clona el repo pro-8 en ~/proyectos/pro-8
-#   4. Ejecuta scripts/local-setup.sh (levanta 6 containers)
+#   4. Ejecuta scripts/local-setup.sh (levanta 7 containers)
 #   5. Compila assets con bun run build
 #   6. Corrige permisos de storage y bootstrap/cache
 #   7. Genera archivo de credenciales fuera del proyecto
@@ -30,22 +30,22 @@ PROJECT_DEST="$HOME/proyectos/pro-8"
 
 echo ""
 echo "============================================"
-echo "  FACTURADOR PRO-8 — Instalacion Local"
+echo "  FACTURADOR PRO-8  Instalacion Local"
 echo "  (Linux nativo)"
 echo "============================================"
 echo ""
 
-# ─── No correr como root ─────────────────────────────────────
+# --- No correr como root -------------------------------------
 # El proyecto se clona en $HOME del usuario actual. Si corres como root,
 # queda en /root y luego docker no puede montar los volumes del usuario.
 if [ "$(id -u)" -eq 0 ]; then
     echo "ERROR: No ejecutes este script como root / sudo."
     echo "  El script pedira sudo solo para los comandos que lo requieran"
-    echo "  (instalar paquetes, docker, añadir tu usuario al grupo docker)."
+    echo "  (instalar paquetes, docker, anadir tu usuario al grupo docker)."
     exit 1
 fi
 
-# ─── Detectar gestor de paquetes ─────────────────────────────
+# --- Detectar gestor de paquetes -----------------------------
 if command -v apt-get >/dev/null 2>&1; then
     PKG_UPDATE="sudo apt-get update -qq"
     PKG_INSTALL="sudo apt-get install -y"
@@ -62,7 +62,7 @@ else
     PKG_INSTALL="true"
 fi
 
-# ─── Prerequisitos basicos ───────────────────────────────────
+# --- Prerequisitos basicos -----------------------------------
 NEED_PKGS=""
 command -v git   >/dev/null 2>&1 || NEED_PKGS="$NEED_PKGS git"
 command -v curl  >/dev/null 2>&1 || NEED_PKGS="$NEED_PKGS curl"
@@ -74,9 +74,9 @@ if [ -n "$NEED_PKGS" ]; then
     $PKG_INSTALL $NEED_PKGS
 fi
 
-# ─── Docker Engine ───────────────────────────────────────────
+# --- Docker Engine -------------------------------------------
 # Idempotente: si docker responde, no se toca. Si no esta, se instala
-# con el script oficial (get.docker.com) y se añade el usuario al grupo.
+# con el script oficial (get.docker.com) y se anade el usuario al grupo.
 if ! command -v docker >/dev/null 2>&1; then
     echo "Docker no encontrado. Instalando con get.docker.com ..."
     # SYSTEMD_PAGER=cat evita que systemctl abra 'less' al final del instalador
@@ -102,7 +102,7 @@ if ! DOCKER_ERR="$(docker info 2>&1 >/dev/null)"; then
     # aplicar el grupo 'docker' en la sesion actual. Se re-ejecuta con sg.
     if echo "$DOCKER_ERR" | grep -qi "permission denied"; then
         if ! id -nG "$USER" | tr ' ' '\n' | grep -qx docker; then
-            echo "Tu usuario no pertenece al grupo 'docker'. Añadiendo..."
+            echo "Tu usuario no pertenece al grupo 'docker'. Anadiendo..."
             sudo usermod -aG docker "$USER"
         else
             echo "Usuario en grupo 'docker' pero la sesion actual no lo tiene activo."
@@ -132,7 +132,7 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 
-# ─── Bun (runtime/bundler JS para Vite) ──────────────────────
+# --- Bun (runtime/bundler JS para Vite) ----------------------
 # Idempotente: si ya existe, se omite.
 if ! command -v bun >/dev/null 2>&1 && [ ! -x "$HOME/.bun/bin/bun" ]; then
     echo "Instalando Bun..."
@@ -145,13 +145,13 @@ else
     echo "Bun ya instalado: $(bun --version 2>/dev/null || echo 'n/d')"
 fi
 
-# ─── Rama (opcional) ──────────────────────────────────────────
+# --- Rama (opcional) ------------------------------------------
 read -p "Rama a clonar [$BRANCH]: " input_branch
 if [ ! -z "$input_branch" ]; then
     BRANCH="$input_branch"
 fi
 
-# ─── Clonar o actualizar ─────────────────────────────────────
+# --- Clonar o actualizar -------------------------------------
 if [ -f "$PROJECT_DEST/artisan" ]; then
     echo "El proyecto ya existe en $PROJECT_DEST"
     read -p "Actualizar con git pull? [S/n]: " do_pull
@@ -167,14 +167,14 @@ else
     echo "Proyecto clonado en $PROJECT_DEST"
 fi
 
-# ─── Ejecutar local-setup.sh ─────────────────────────────────
+# --- Ejecutar local-setup.sh ---------------------------------
 echo ""
-echo "Ejecutando local-setup.sh (levanta 6 containers)..."
+echo "Ejecutando local-setup.sh (levanta 7 containers)..."
 echo ""
 cd "$PROJECT_DEST"
 bash scripts/local-setup.sh
 
-# ─── Compilar assets con Bun (Vite) ──────────────────────────
+# --- Compilar assets con Bun (Vite) --------------------------
 # canvas (dependencia transitiva) necesita libs nativas para compilar.
 # --ignore-scripts evita fallos en entornos sin build-tools.
 echo ""
@@ -185,7 +185,7 @@ bun install --ignore-scripts
 echo "Compilando assets (vite build)..."
 bun run build || echo "ADVERTENCIA: fallo el build de assets; revisa errores arriba"
 
-# ─── Corregir permisos de storage y bootstrap/cache ──────────
+# --- Corregir permisos de storage y bootstrap/cache ----------
 # artisan dentro del contenedor corre como root y puede crear subdirs con
 # owner root / 700; php-fpm corre como www-data y no puede escribir ahi.
 # Sintoma tipico:
@@ -202,7 +202,7 @@ else
     echo "ADVERTENCIA: contenedor fpm_pro8_local no esta corriendo, omito fix de permisos"
 fi
 
-# ─── Alias pro8up (reinicio rapido del stack) ────────────────
+# --- Alias pro8up (reinicio rapido del stack) ----------------
 # Util cuando quieres tirar y levantar todo el stack sin recordar la ruta.
 # Idempotente: no duplica si ya existe.
 BASHRC="${HOME}/.bashrc"
@@ -219,7 +219,7 @@ if [ -f "$RESTART_SCRIPT" ]; then
     fi
 fi
 
-# ─── Archivo de credenciales ─────────────────────────────────
+# --- Archivo de credenciales ---------------------------------
 DATA_CONFIG="$(dirname "$PROJECT_DEST")/pro-8-local.txt"
 cat << EOF > "$DATA_CONFIG"
 ============================================

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# 02-install-prod.sh — Facturador Pro-8: Instalacion de produccion en WSL2
+# 02-install-prod.sh  Facturador Pro-8: Instalacion de produccion en WSL2
 #
 # Fase 2 del proceso de instalacion en Windows Server.
 # Ejecutar DENTRO de WSL despues de completar 01-setup-wsl.ps1
@@ -27,7 +27,7 @@ DB_FOLDER="seeders"
 SCHEDULING="scheduling:8.2"
 SUPERVISOR="supervisor-php:8.2"
 
-# ─── Funciones auxiliares ─────────────────────────────────────
+# --- Funciones auxiliares -------------------------------------
 
 find_free_mysql_port() {
     local start_port=${1:-3001}
@@ -59,7 +59,7 @@ gen_password() {
     head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20 ; echo ''
 }
 
-# ─── Verificar que estamos en WSL ─────────────────────────────
+# --- Verificar que estamos en WSL -----------------------------
 if ! grep -qi microsoft /proc/version 2>/dev/null; then
     echo "ADVERTENCIA: Este script esta disenado para ejecutarse dentro de WSL2."
     echo "Si estas en un servidor Linux nativo, usa install.sh en su lugar:"
@@ -70,7 +70,7 @@ if ! grep -qi microsoft /proc/version 2>/dev/null; then
     fi
 fi
 
-# ─── Verificar Docker ─────────────────────────────────────────
+# --- Verificar Docker -----------------------------------------
 # En WSL2 con Docker Desktop, el cliente puede heredar el contexto
 # 'desktop-linux' (endpoint npipe de Windows), que rompe dentro de Linux
 # con: "Failed to initialize: protocol not available" o panic del CLI.
@@ -94,12 +94,12 @@ if ! docker info >/dev/null 2>&1; then
 fi
 echo "Docker OK"
 
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 #  PREGUNTAS AL USUARIO
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 echo ""
 echo "============================================"
-echo "  FACTURADOR PRO-8 — Instalacion Produccion"
+echo "  FACTURADOR PRO-8  Instalacion Produccion"
 echo "  (Windows Server / WSL2)"
 echo "============================================"
 echo ""
@@ -117,7 +117,7 @@ if [ -z "$SERVICE_NUMBER" ]; then
     SERVICE_NUMBER="1"
 fi
 
-# PUERTO MYSQL — Deteccion automatica
+# PUERTO MYSQL  Deteccion automatica
 SUGGESTED_PORT=$((3000 + $SERVICE_NUMBER))
 
 echo ""
@@ -157,11 +157,11 @@ echo "Puerto MySQL seleccionado: $MYSQL_PORT_HOST"
 echo ""
 sleep 2
 
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 #  VARIABLES
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 
-# Ruta de instalacion — ext4 nativo en WSL (HOME del usuario)
+# Ruta de instalacion  ext4 nativo en WSL (HOME del usuario)
 PATH_INSTALL="$HOME/proyectos"
 mkdir -p "$PATH_INSTALL"
 
@@ -177,9 +177,15 @@ MYSQL_ROOT_PASSWORD=$(gen_password)
 # Redis
 REDIS_CONTAINER_NAME="redis_${DIR_MODIFIED}"
 
-# ═════════════════════════════════════════════════════════════
+# Laravel Broadcasting / Soketi
+SOKETI_CONTAINER_NAME="soketi_${DIR_MODIFIED}"
+PUSHER_APP_ID="vendemaster${SERVICE_NUMBER}"
+PUSHER_APP_KEY=$(gen_password)
+PUSHER_APP_SECRET=$(gen_password)
+
+# -------------------------------------------------------------
 #  PRIMER SERVICIO: instalar paquetes base + proxy
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 
 if [ "$SERVICE_NUMBER" = '1' ]; then
     echo "Actualizando sistema"
@@ -225,9 +231,9 @@ fi
 
 echo "Configurando $DIR"
 
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 #  CLONAR Y CONFIGURAR PROYECTO
-# ═════════════════════════════════════════════════════════════
+# -------------------------------------------------------------
 
 if ! [ -d $PATH_INSTALL/proxy/fpms/$DIR ]; then
     echo "Clonando repositorio"
@@ -236,7 +242,7 @@ if ! [ -d $PATH_INSTALL/proxy/fpms/$DIR ]; then
 
     mkdir -p $PATH_INSTALL/proxy/fpms/$DIR
 
-    # ─── Nginx config para proxy ─────────────────────────────
+    # --- Nginx config para proxy -----------------------------
     cat << EOF > $PATH_INSTALL/proxy/fpms/$DIR/default
 server {
     listen 80 default_server;
@@ -256,6 +262,18 @@ server {
     }
     location / {
         try_files \$uri \$uri/ /index.php\$is_args\$args;
+    }
+    location /app {
+        proxy_pass http://$SOKETI_CONTAINER_NAME:6001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
     location ~ \.php\$ {
         include snippets/fastcgi-php.conf;
@@ -283,7 +301,7 @@ server {
 }
 EOF
 
-    # ─── Dockerfile para Nginx (config baked-in, sin bind mount) ──
+    # --- Dockerfile para Nginx (config baked-in, sin bind mount) --
     cat << 'EOFNGINXDF' > $PATH_INSTALL/proxy/fpms/$DIR/Dockerfile
 FROM rash07/nginx
 RUN rm -f /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
@@ -291,7 +309,7 @@ COPY default /etc/nginx/sites-available/default
 RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 EOFNGINXDF
 
-    # ─── docker-compose.yml ──────────────────────────────────
+    # --- docker-compose.yml ----------------------------------
     cat << EOF > $PATH_INSTALL/$DIR/docker-compose.yml
 version: '3'
 
@@ -353,6 +371,15 @@ services:
         volumes:
             - redisdata$SERVICE_NUMBER:/data
         restart: always
+    soketi_$SERVICE_NUMBER:
+        image: quay.io/soketi/soketi:1.6-16-debian
+        container_name: $SOKETI_CONTAINER_NAME
+        environment:
+            - SOKETI_DEBUG=0
+            - SOKETI_DEFAULT_APP_ID=\${PUSHER_APP_ID}
+            - SOKETI_DEFAULT_APP_KEY=\${PUSHER_APP_KEY}
+            - SOKETI_DEFAULT_APP_SECRET=\${PUSHER_APP_SECRET}
+        restart: always
     scheduling_$SERVICE_NUMBER:
         build:
             context: ./docker/scheduling
@@ -386,7 +413,7 @@ volumes:
 
 EOF
 
-    # ─── .env ────────────────────────────────────────────────
+    # --- .env ------------------------------------------------
     cp $PATH_INSTALL/$DIR/.env.example $PATH_INSTALL/$DIR/.env
 
     cat << EOF >> $PATH_INSTALL/$DIR/.env
@@ -397,10 +424,23 @@ MYSQL_PASSWORD=$MYSQL_PASSWORD
 MYSQL_DATABASE=$MYSQL_DATABASE
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 MYSQL_PORT_HOST=$MYSQL_PORT_HOST
+PUSHER_APP_ID=$PUSHER_APP_ID
+PUSHER_APP_KEY=$PUSHER_APP_KEY
+PUSHER_APP_SECRET=$PUSHER_APP_SECRET
 EOF
 
     echo "Configurando env"
     cd "$PATH_INSTALL/$DIR"
+
+    set_env_var() {
+        local key="$1"
+        local value="$2"
+        if grep -q "^${key}=" .env; then
+            sed -i "/^${key}=/c\\${key}=${value}" .env
+        else
+            echo "${key}=${value}" >> .env
+        fi
+    }
 
     sed -i "/APP_NAME=/c\APP_NAME=$HOST" .env
     sed -i "/DB_DATABASE=/c\DB_DATABASE=$MYSQL_DATABASE" .env
@@ -413,14 +453,26 @@ EOF
     sed -i '/APP_DEBUG=/c\APP_DEBUG=false' .env
     sed -i '/APP_ENV=/c\APP_ENV=production' .env
 
-    # CACHE_DRIVER=file es CRITICO — redis_tenancy rompe CLI
+    # CACHE_DRIVER=file es CRITICO  redis_tenancy rompe CLI
     sed -i '/CACHE_DRIVER=/c\CACHE_DRIVER=file' .env
     sed -i '/QUEUE_CONNECTION=/c\QUEUE_CONNECTION=redis' .env
     sed -i "/REDIS_HOST=/c\REDIS_HOST=$REDIS_CONTAINER_NAME" .env
     sed -i '/REDIS_PASSWORD=/c\REDIS_PASSWORD=null' .env
     sed -i '/REDIS_PORT=/c\REDIS_PORT=6379' .env
 
-    # ─── DatabaseSeeder con usuario admin ────────────────────
+    set_env_var "BROADCAST_DRIVER" "pusher"
+    set_env_var "PUSHER_APP_ID" "$PUSHER_APP_ID"
+    set_env_var "PUSHER_APP_KEY" "$PUSHER_APP_KEY"
+    set_env_var "PUSHER_APP_SECRET" "$PUSHER_APP_SECRET"
+    set_env_var "PUSHER_APP_CLUSTER" "mt1"
+    set_env_var "PUSHER_HOST" "$SOKETI_CONTAINER_NAME"
+    set_env_var "PUSHER_PORT" "6001"
+    set_env_var "PUSHER_SCHEME" "http"
+    set_env_var "PUSHER_CLIENT_HOST" "$HOST"
+    set_env_var "PUSHER_CLIENT_PORT" "443"
+    set_env_var "PUSHER_CLIENT_SCHEME" "https"
+
+    # --- DatabaseSeeder con usuario admin --------------------
     ADMIN_PASSWORD=$(gen_password)
     echo "Configurando archivo para usuario administrador"
     mv "$PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php" "$PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php.bk"
@@ -469,7 +521,7 @@ with open('$SEEDER_FILE', 'w', newline='\n') as f:
     f.write(content)
 "
 
-    # ─── Dockerfiles con OPcache (validate_timestamps=0) ─────
+    # --- Dockerfiles con OPcache (validate_timestamps=0) -----
     echo "Generando Dockerfiles con OPcache..."
 
     mkdir -p "$PATH_INSTALL/$DIR/docker/php-fpm"
@@ -548,7 +600,7 @@ character-set-server            = utf8mb4
 collation-server                = utf8mb4_unicode_ci
 EOFMYCNF
 
-    # ─── Levantar containers ─────────────────────────────────
+    # --- Levantar containers ---------------------------------
     echo "Configurando proyecto"
     docker compose up -d --build
 
@@ -590,16 +642,16 @@ EOFMYCNF
     rm $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php
     mv $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php.bk $PATH_INSTALL/$DIR/database/$DB_FOLDER/DatabaseSeeder.php
 
-    # ─── Optimizar Laravel ───────────────────────────────────
+    # --- Optimizar Laravel -----------------------------------
     echo "Optimizando Laravel (caches + autoload)..."
     docker compose exec -T fpm_$SERVICE_NUMBER php artisan config:cache
-    # IMPORTANTE: NO usar route:cache — hyn/multi-tenant necesita evaluar rutas
+    # IMPORTANTE: NO usar route:cache  hyn/multi-tenant necesita evaluar rutas
     # dinamicamente por hostname en cada request
     docker compose exec -T fpm_$SERVICE_NUMBER php artisan route:clear
     docker compose exec -T fpm_$SERVICE_NUMBER php artisan event:cache
     docker compose exec -T fpm_$SERVICE_NUMBER sh -c "cd /var/www/html && composer dump-autoload --classmap-authoritative 2>&1" | tail -1
 
-    # ─── Permisos ────────────────────────────────────────────
+    # --- Permisos --------------------------------------------
     # El repo ya trae storage/app/tenancy/tenants y demas subcarpetas.
     # El chmod -R 777 garantiza que tanto root (comandos artisan) como
     # www-data (worker php-fpm) puedan escribir en todo storage.
@@ -612,7 +664,7 @@ EOFMYCNF
         chmod +x $PATH_INSTALL/$DIR/script-update.sh
     fi
 
-    # ─── Supervisor ──────────────────────────────────────────
+    # --- Supervisor ------------------------------------------
     echo "Esperando que supervisor este listo..."
     sleep 5
 
@@ -622,10 +674,10 @@ EOFMYCNF
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl update 2>/dev/null || true
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl start all 2>/dev/null || true
 
-    # ─── Instalar pro8up (reinicio seguro del stack tras reboot WSL2) ──
+    # --- Instalar pro8up (reinicio seguro del stack tras reboot WSL2) --
     # En WSL2 + Docker Desktop, tras reiniciar Windows los contenedores
     # pueden levantar (restart: always) ANTES de que WSL monte $HOME.
-    # El bind mount ./ → /var/www/html queda apuntando a un directorio
+    # El bind mount ./ -> /var/www/html queda apuntando a un directorio
     # vacio y nginx devuelve 404/502 para todos los dominios.
     # 'pro8up' hace `compose down && up -d` de proxy + todos los proyectos
     # una vez que el filesystem ya esta disponible. Idempotente.
@@ -653,7 +705,7 @@ EOFMYCNF
         fi
     fi
 
-    # ─── Arranque automatico (systemd) ──────────────────────
+    # --- Arranque automatico (systemd) ----------------------
     # Instala /etc/systemd/system/pro8-autostart.service para recrear el
     # stack despues de cada reinicio de Windows. Idempotente: no reinstala
     # si ya existe el unit.
@@ -670,10 +722,10 @@ EOFMYCNF
                 echo "ADVERTENCIA: no se pudo activar el arranque automatico (continuo sin abortar)"
         fi
     else
-        echo "✓ Arranque automatico ya configurado (pro8-autostart.service)"
+        echo "OK Arranque automatico ya configurado (pro8-autostart.service)"
     fi
 
-    # ─── SSL ─────────────────────────────────────────────────
+    # --- SSL -------------------------------------------------
     read -p "Instalar SSL gratuito? si[s] no[n]: " ssl
     if [ "$ssl" = "s" ]; then
 
@@ -718,7 +770,7 @@ EOFMYCNF
         fi
     fi
 
-    # ─── Resumen ─────────────────────────────────────────────
+    # --- Resumen ---------------------------------------------
     echo ""
     echo "=============================================="
     echo "INSTALACION COMPLETADA EXITOSAMENTE"
@@ -737,6 +789,10 @@ EOFMYCNF
     echo "Host: $REDIS_CONTAINER_NAME"
     echo "Puerto: 6379"
     echo "Password: null"
+    echo "----------------------------------------------"
+    echo "Broadcasting"
+    echo "Soketi interno: $SOKETI_CONTAINER_NAME:6001"
+    echo "WebSocket cliente: wss://$HOST/app/{key}"
     echo "=============================================="
 
     # Credenciales en archivo
@@ -761,11 +817,16 @@ Host: $REDIS_CONTAINER_NAME
 Puerto: 6379
 Password: null
 ----------------------------------------------
+Broadcasting
+Soketi interno: $SOKETI_CONTAINER_NAME:6001
+WebSocket cliente: wss://$HOST/app/{key}
+----------------------------------------------
 Service Number: $SERVICE_NUMBER
 Version PHP: $VERSION_PHP_IMAGE
 Contenedor FPM: fpm_$DIR_MODIFIED
 Contenedor MariaDB: mariadb_$DIR_MODIFIED
 Contenedor Redis: $REDIS_CONTAINER_NAME
+Contenedor Soketi: $SOKETI_CONTAINER_NAME
 ============================================
 
 Para entrar al proyecto:
@@ -792,7 +853,7 @@ EOF
         cat << EOF >> $DATA_CONFIG
 
 # ============================================
-# FASE 2 — Proyecto: $HOST
+# FASE 2  Proyecto: $HOST
 # Instalado: $(date '+%Y-%m-%d %H:%M')
 # ============================================
 URL: http://$HOST

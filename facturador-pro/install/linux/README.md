@@ -1,17 +1,17 @@
-# Facturador Pro-8 — Instalación en Linux (Ubuntu/Debian)
+# Facturador Pro-8 Ã¢â‚¬â€ InstalaciÃƒÂ³n en Linux (Ubuntu/Debian)
 
 Scripts para instalar y mantener Pro-8 sobre Docker en hosts Linux nativos.
 
 ## Contenido
 
-| Archivo | Propósito |
+| Archivo | PropÃƒÂ³sito |
 |---------|-----------|
-| `install.sh` | Instalación **producción** (proxy + tenant + MySQL + Redis + SSL) |
-| `install-local.sh` | Instalación **local / desarrollo** (sin proxy, sin SSL) ← nuevo |
-| `updateSSL.sh` | Renovación de certificados SSL |
-| `update.sh` | Actualizar código del proyecto tras `git pull` |
+| `install.sh` | InstalaciÃƒÂ³n **producciÃƒÂ³n** (proxy + tenant + MySQL + Redis + SSL) |
+| `install-local.sh` | InstalaciÃƒÂ³n **local / desarrollo** (sin proxy, sin SSL) Ã¢â€ Â nuevo |
+| `updateSSL.sh` | RenovaciÃƒÂ³n de certificados SSL |
+| `update.sh` | Actualizar cÃƒÂ³digo del proyecto tras `git pull` |
 
-## Instalación producción
+## InstalaciÃƒÂ³n producciÃƒÂ³n
 
 ```bash
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/install.sh
@@ -19,11 +19,13 @@ chmod +x install.sh
 sudo ./install.sh
 ```
 
-El script pide dominio, número de servicio y puerto MySQL.
+El script pide dominio, nÃƒÂºmero de servicio y puerto MySQL.
 
-## Instalación local / desarrollo
+La instalaciÃƒÂ³n de producciÃƒÂ³n incluye Soketi para Laravel Broadcasting. Pro-8 publica internamente a `soketi_DOMINIO:6001` y VendeMaster se conecta por el mismo dominio HTTPS (`wss://DOMINIO/app/...`), sin abrir un puerto WebSocket adicional.
 
-Equivalente Linux nativo del `02-install-dev.sh` de Windows Server. Monta el stack con `scripts/local-setup.sh` del propio proyecto: 6 containers, sin proxy ni SSL.
+## InstalaciÃƒÂ³n local / desarrollo
+
+Equivalente Linux nativo del `02-install-dev.sh` de Windows Server. Monta el stack con `scripts/local-setup.sh` del propio proyecto: 7 containers, sin proxy ni SSL.
 
 ```bash
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/install-local.sh
@@ -36,13 +38,13 @@ El script:
 1. Verifica/instala prerequisitos (`git`, `curl`, `unzip`, Docker Engine con `get.docker.com`).
 2. Instala **Bun** (runtime JS para compilar assets con Vite).
 3. Clona `pro-8` en `~/proyectos/pro-8` (pregunta rama, default `master`).
-4. Ejecuta `scripts/local-setup.sh` del repo — levanta nginx + fpm + mariadb + redis + scheduling + supervisor.
+4. Ejecuta `scripts/local-setup.sh` del repo Ã¢â‚¬â€ levanta nginx + fpm + mariadb + redis + soketi + scheduling + supervisor.
 5. `bun install --ignore-scripts` + `bun run build`.
 6. Corrige permisos de `storage/` y `bootstrap/cache` dentro del contenedor `fpm_pro8_local`.
-7. Instala alias `pro8up` en `~/.bashrc` para reiniciar el stack rápido.
+7. Instala alias `pro8up` en `~/.bashrc` para reiniciar el stack rÃƒÂ¡pido.
 8. Genera `~/proyectos/pro-8-local.txt` con credenciales.
 
-Tras la instalación:
+Tras la instalaciÃƒÂ³n:
 
 | Recurso | Valor |
 |---------|-------|
@@ -51,11 +53,11 @@ Tras la instalación:
 | Redis | `redis_pro8_local:6379` sin password |
 | FPM | `fpm_pro8_local` |
 
-> **Primer arranque y Docker:** si Docker acaba de instalarse, el script añade tu usuario al grupo `docker` y termina. Cierra sesión (o ejecuta `newgrp docker`) y vuelve a lanzarlo.
+> **Primer arranque y Docker:** si Docker acaba de instalarse, el script aÃƒÂ±ade tu usuario al grupo `docker` y termina. Cierra sesiÃƒÂ³n (o ejecuta `newgrp docker`) y vuelve a lanzarlo.
 
 ## Actualizar el proyecto
 
-Cuando hagas `git pull` y el commit incluye nuevos controllers, módulos, migraciones o rutas, el autoloader de Composer y las caches de Laravel quedan desactualizados. El síntoma típico es:
+Cuando hagas `git pull` y el commit incluye nuevos controllers, mÃƒÂ³dulos, migraciones o rutas, el autoloader de Composer y las caches de Laravel quedan desactualizados. El sÃƒÂ­ntoma tÃƒÂ­pico es:
 
 ```
 Target class [Modules\Offline\Http\Controllers\BusinessTurnController] does not exist.
@@ -75,13 +77,17 @@ El script hace, en orden:
 
 1. `git pull`
 2. `composer install` (con `--no-dev --optimize-autoloader` en prod)
-3. **`composer dump-autoload -o`** ← clave para clases nuevas
+3. **`composer dump-autoload -o`** Ã¢â€ Â clave para clases nuevas
 4. `php artisan module:discover`
 5. `migrate` + `tenancy:migrate`
 6. `route:clear` / `config:clear` / `cache:clear` / `view:clear`
 7. `config:cache` (solo en prod)
 8. `kill -USR2 1` sobre `fpm_1` (purga OPcache sin reiniciar el contenedor)
 9. `supervisorctl restart all` sobre `supervisor_1` (reinicia colas)
+
+AdemÃƒÂ¡s normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
+
+> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
 
 > Todos los `php artisan` llevan `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 
@@ -110,7 +116,19 @@ docker compose exec -T fpm_1 sh -c "kill -USR2 1"
 docker compose exec -T supervisor_1 supervisorctl restart all
 ```
 
-## Verificación post-actualización
+Para instalaciones con VendeMaster/Restaurant, revisa que `.env` tenga:
+
+```env
+BROADCAST_DRIVER=pusher
+PUSHER_HOST=soketi_mi-empresa_com
+PUSHER_PORT=6001
+PUSHER_SCHEME=http
+PUSHER_CLIENT_HOST=mi-empresa.com
+PUSHER_CLIENT_PORT=443
+PUSHER_CLIENT_SCHEME=https
+```
+
+## VerificaciÃƒÂ³n post-actualizaciÃƒÂ³n
 
 ```bash
 # Endpoints nuevos deben responder 200/401 (no 500 con "Target class does not exist")
