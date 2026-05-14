@@ -85,6 +85,14 @@ El script hace, en orden:
 
 > Todos los `php artisan` llevan `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 
+Si `composer install` falla porque `composer.lock` existe pero no contiene un paquete nuevo requerido por `composer.json` (por ejemplo `pusher/pusher-php-server` para Laravel Broadcasting), **no uses `composer update` global**. El script hace fallback a:
+
+```bash
+composer update pusher/pusher-php-server --with-dependencies
+```
+
+Esto actualiza solo el paquete nuevo y sus dependencias directas, evitando mover decenas de dependencias no relacionadas.
+
 ### Comandos manuales (si prefieres no usar el script)
 
 ```bash

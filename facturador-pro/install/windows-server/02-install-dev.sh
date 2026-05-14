@@ -20,6 +20,19 @@ REPO_URL="https://gitlab.com/gians96/pro-8.git"
 BRANCH="master"
 PROJECT_DEST="$HOME/proyectos/pro-8"
 
+persist_bun_path() {
+    for shell_file in "$HOME/.profile" "$HOME/.bashrc"; do
+        if [ -f "$shell_file" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$shell_file"; then
+            {
+                echo ""
+                echo "# Bun runtime/bundler"
+                echo "export BUN_INSTALL=\"\$HOME/.bun\""
+                echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
+            } >> "$shell_file"
+        fi
+    done
+}
+
 ensure_bun() {
     export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
     case ":$PATH:" in
@@ -48,14 +61,7 @@ ensure_bun() {
     export PATH="$BUN_INSTALL/bin:$PATH"
     hash -r 2>/dev/null || true
 
-    if [ -f "$HOME/.bashrc" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$HOME/.bashrc"; then
-        {
-            echo ""
-            echo "# Bun runtime/bundler"
-            echo "export BUN_INSTALL=\"\$HOME/.bun\""
-            echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
-        } >> "$HOME/.bashrc"
-    fi
+    persist_bun_path
 
     echo "Bun instalado: $(bun --version)"
 }
@@ -94,6 +100,7 @@ echo "Docker OK (contexto: $(docker context show 2>/dev/null || echo default))"
 
 # ─── Instalar Bun (runtime/bundler JS) ────────────────────────
 # Se usa para compilar assets con Vite y ejecutar socket-server.js.
+persist_bun_path
 ensure_bun
 
 # ─── Rama (opcional) ──────────────────────────────────────────

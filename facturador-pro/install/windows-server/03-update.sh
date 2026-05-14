@@ -22,6 +22,19 @@ MODE="${1:-prod}"         # prod | dev
 FPM="fpm_1"
 SUPERVISOR="supervisor_1"
 
+persist_bun_path() {
+    for shell_file in "$HOME/.profile" "$HOME/.bashrc"; do
+        if [ -f "$shell_file" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$shell_file"; then
+            {
+                echo ""
+                echo "# Bun runtime/bundler"
+                echo "export BUN_INSTALL=\"\$HOME/.bun\""
+                echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
+            } >> "$shell_file"
+        fi
+    done
+}
+
 ensure_bun() {
     export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
     case ":$PATH:" in
@@ -50,14 +63,7 @@ ensure_bun() {
     export PATH="$BUN_INSTALL/bin:$PATH"
     hash -r 2>/dev/null || true
 
-    if [ -f "$HOME/.bashrc" ] && ! grep -q 'BUN_INSTALL=.*/.bun' "$HOME/.bashrc"; then
-        {
-            echo ""
-            echo "# Bun runtime/bundler"
-            echo "export BUN_INSTALL=\"\$HOME/.bun\""
-            echo "export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
-        } >> "$HOME/.bashrc"
-    fi
+    persist_bun_path
 
     echo "Bun instalado: $(bun --version)"
 }
