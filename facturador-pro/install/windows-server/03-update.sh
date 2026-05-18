@@ -214,15 +214,10 @@ echo "-> 8/8 reiniciar colas"
 docker compose exec -T $SUPERVISOR supervisorctl restart all 2>/dev/null || \
     echo "  (supervisor no esta activo  OK en dev)"
 
-# Auto-start (WSL2 only)
+# Auto-start (WSL2 only): lo instala el script de instalacion.
 if grep -qi microsoft /proc/version 2>/dev/null && [ ! -f /etc/systemd/system/pro8-autostart.service ]; then
-    AUTOSTART_URL="https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/enable-autostart.sh"
-    if curl -fsSL -o /tmp/enable-autostart.sh "$AUTOSTART_URL" 2>/dev/null; then
-        echo ""
-        echo "-> Configurando arranque automatico del stack (requiere sudo)..."
-        sudo SUDO_USER="${USER}" bash /tmp/enable-autostart.sh || \
-            echo "   ADVERTENCIA: No se pudo activar auto-start. Ejecuta manualmente: sudo bash /tmp/enable-autostart.sh"
-    fi
+    echo ""
+    echo "ADVERTENCIA: pro8-autostart no esta instalado. Re-ejecuta el script de instalacion actualizado."
 fi
 
 echo ""

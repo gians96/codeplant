@@ -161,8 +161,13 @@ sleep 2
 #  VARIABLES
 # -------------------------------------------------------------
 
-# Ruta de instalacion  ext4 nativo en WSL (HOME del usuario)
-PATH_INSTALL="$HOME/proyectos"
+# Ruta de instalacion ext4 nativo en WSL (HOME del usuario real, aunque se ejecute con sudo)
+INSTALL_USER="${SUDO_USER:-$USER}"
+INSTALL_HOME=$(getent passwd "$INSTALL_USER" | cut -d: -f6)
+if [ -z "$INSTALL_HOME" ]; then
+    INSTALL_HOME="$HOME"
+fi
+PATH_INSTALL="$INSTALL_HOME/proyectos"
 mkdir -p "$PATH_INSTALL"
 
 DIR=$(echo $HOST)
@@ -329,7 +334,7 @@ services:
             fpm_$SERVICE_NUMBER:
                 condition: service_healthy
         healthcheck:
-            test: ["CMD-SHELL", "service nginx status || exit 1"]
+            test: ["CMD-SHELL", "service nginx status >/dev/null 2>&1 && test -f /var/www/html/public/index.php"]
             interval: 30s
             timeout: 5s
             retries: 3
@@ -343,8 +348,13 @@ services:
         volumes:
             - ./:/var/www/html
         restart: always
+        depends_on:
+            mariadb_$SERVICE_NUMBER:
+                condition: service_healthy
+            redis_$SERVICE_NUMBER:
+                condition: service_healthy
         healthcheck:
-            test: ["CMD-SHELL", "kill -0 1 2>/dev/null && grep -q ':2328' /proc/net/tcp /proc/net/tcp6 2>/dev/null"]
+            test: ["CMD-SHELL", "test -f /var/www/html/artisan && bash -c 'echo > /dev/tcp/127.0.0.1/9000' 2>/dev/null"]
             interval: 30s
             timeout: 5s
             retries: 3
@@ -364,6 +374,12 @@ services:
         ports:
             - "\${MYSQL_PORT_HOST}:3306"
         restart: always
+        healthcheck:
+            test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$MYSQL_ROOT_PASSWORD >/dev/null 2>&1"]
+            interval: 10s
+            timeout: 5s
+            retries: 12
+            start_period: 30s
     redis_$SERVICE_NUMBER:
         image: redis:alpine
         container_name: redis_$DIR_MODIFIED
@@ -371,6 +387,12 @@ services:
         volumes:
             - redisdata$SERVICE_NUMBER:/data
         restart: always
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 6
+            start_period: 5s
     soketi_$SERVICE_NUMBER:
         image: quay.io/soketi/soketi:1.6-16-debian
         container_name: $SOKETI_CONTAINER_NAME
@@ -389,6 +411,19 @@ services:
         volumes:
             - ./:/var/www/html
         restart: always
+        depends_on:
+            fpm_$SERVICE_NUMBER:
+                condition: service_healthy
+            mariadb_$SERVICE_NUMBER:
+                condition: service_healthy
+            redis_$SERVICE_NUMBER:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD-SHELL", "test -f /var/www/html/artisan && ps aux | grep -Eq '[c]ron|[c]rond|schedule:(work|run)'"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
     supervisor_$SERVICE_NUMBER:
         build:
             context: ./docker/supervisor
@@ -399,6 +434,19 @@ services:
             - ./:/var/www/html
             - ./supervisor.conf:/etc/supervisor/conf.d/supervisor.conf
         restart: always
+        depends_on:
+            fpm_$SERVICE_NUMBER:
+                condition: service_healthy
+            mariadb_$SERVICE_NUMBER:
+                condition: service_healthy
+            redis_$SERVICE_NUMBER:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD-SHELL", "test -f /var/www/html/artisan && supervisorctl status | grep -Eq 'laravel-worker.*RUNNING'"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
 
 networks:
     default:
@@ -674,55 +722,354 @@ EOFMYCNF
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl update 2>/dev/null || true
     docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl start all 2>/dev/null || true
 
-    # --- Instalar pro8up (reinicio seguro del stack tras reboot WSL2) --
-    # En WSL2 + Docker Desktop, tras reiniciar Windows los contenedores
-    # pueden levantar (restart: always) ANTES de que WSL monte $HOME.
-    # El bind mount ./ -> /var/www/html queda apuntando a un directorio
-    # vacio y nginx devuelve 404/502 para todos los dominios.
-    # 'pro8up' hace `compose down && up -d` de proxy + todos los proyectos
-    # una vez que el filesystem ya esta disponible. Idempotente.
-    RESTART_SCRIPT="$PATH_INSTALL/pro8-prod-restart.sh"
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    SOURCE_RESTART="$SCRIPT_DIR/pro8-prod-restart.sh"
-    if [ -f "$SOURCE_RESTART" ]; then
-        cp "$SOURCE_RESTART" "$RESTART_SCRIPT"
-    else
-        # Fallback: descargar del repo (cuando el script se ejecuta con curl)
-        curl -fsSL -o "$RESTART_SCRIPT" \
-            "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/pro8-prod-restart.sh" \
-            2>/dev/null || true
-    fi
-    if [ -f "$RESTART_SCRIPT" ]; then
-        chmod +x "$RESTART_SCRIPT"
-        BASHRC="${HOME}/.bashrc"
-        if [ -f "$BASHRC" ] && ! grep -q "alias pro8up=" "$BASHRC"; then
-            {
-                echo ""
-                echo "# pro-8: reinicio seguro del stack tras reboot (WSL2 + Docker Desktop)"
-                echo "alias pro8up='bash ${RESTART_SCRIPT}'"
-            } >> "$BASHRC"
-            echo "Alias 'pro8up' instalado en ~/.bashrc"
+    echo "Verificando workers de supervisor..."
+    for i in {1..20}; do
+        if docker compose exec -T supervisor_$SERVICE_NUMBER sh -c "test -f /var/www/html/artisan && supervisorctl status | grep -Eq 'laravel-worker.*RUNNING'" >/dev/null 2>&1; then
+            echo "Workers activos"
+            break
         fi
+        if [ $i -eq 20 ]; then
+            echo "ERROR: supervisor no tiene workers RUNNING"
+            docker compose exec -T supervisor_$SERVICE_NUMBER supervisorctl status 2>/dev/null || true
+            exit 1
+        fi
+        sleep 2
+    done
+
+    echo "Verificando scheduler..."
+    for i in {1..20}; do
+        if docker compose exec -T scheduling_$SERVICE_NUMBER sh -c "test -f /var/www/html/artisan && ps aux | grep -Eq '[c]ron|[c]rond|schedule:(work|run)'" >/dev/null 2>&1; then
+            echo "Scheduler activo"
+            break
+        fi
+        if [ $i -eq 20 ]; then
+            echo "ERROR: scheduler no parece estar activo"
+            docker compose exec -T scheduling_$SERVICE_NUMBER ps aux 2>/dev/null || true
+            exit 1
+        fi
+        sleep 2
+    done
+
+    # --- Reinicio seguro + autostart WSL2 -------------------
+    # Todo queda instalado desde este script: no se descargan scripts extra.
+    RESTART_SCRIPT="$PATH_INSTALL/pro8-prod-restart.sh"
+    cat > "$RESTART_SCRIPT" << 'EOFRESTART'
+#!/bin/bash
+set -e
+
+ROOT="__PATH_INSTALL__"
+PROXY_DIR="$ROOT/proxy"
+
+wait_for_docker() {
+    echo "→ Esperando Docker..."
+    for i in $(seq 1 60); do
+        if docker info >/dev/null 2>&1; then
+            echo "✓ Docker responde"
+            return 0
+        fi
+        echo "  Docker aun no responde ($i/60)"
+        sleep 5
+    done
+    echo "ERROR: Docker no respondio en 5 minutos."
+    exit 1
+}
+
+wait_for_root() {
+    echo "→ Verificando filesystem de WSL..."
+    for i in $(seq 1 30); do
+        if [ -d "$ROOT" ]; then
+            echo "✓ $ROOT accesible"
+            return 0
+        fi
+        echo "  Esperando $ROOT ($i/30)"
+        sleep 2
+    done
+    echo "ERROR: $ROOT no existe."
+    exit 1
+}
+
+compose_service() {
+    local project_dir="$1"
+    local prefix="$2"
+    (cd "$project_dir" && docker compose config --services | grep -E "^${prefix}_[0-9]+$" | head -1)
+}
+
+wait_for_project_mount() {
+    local proj="$1"
+    local project_dir="$ROOT/$proj"
+    local fpm_service
+    local probe_image
+
+    fpm_service=$(compose_service "$project_dir" "fpm")
+    if [ -z "$fpm_service" ]; then
+        echo "ERROR: no se encontro servicio fpm_* en $project_dir/docker-compose.yml"
+        exit 1
+    fi
+    probe_image=$(cd "$project_dir" && docker compose images -q "$fpm_service" 2>/dev/null | head -1)
+    if [ -z "$probe_image" ]; then
+        probe_image="rash07/php-fpm:8.2"
     fi
 
-    # --- Arranque automatico (systemd) ----------------------
-    # Instala /etc/systemd/system/pro8-autostart.service para recrear el
-    # stack despues de cada reinicio de Windows. Idempotente: no reinstala
-    # si ya existe el unit.
-    AUTOSTART_SRC="$SCRIPT_DIR/enable-autostart.sh"
-    if [ ! -f /etc/systemd/system/pro8-autostart.service ]; then
-        if [ ! -f "$AUTOSTART_SRC" ]; then
-            curl -fsSL -o /tmp/enable-autostart.sh \
-                "https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/enable-autostart.sh" \
-                2>/dev/null && AUTOSTART_SRC=/tmp/enable-autostart.sh
+    echo "→ Verificando bind mount Docker para $proj..."
+    for i in $(seq 1 30); do
+        if docker run --rm -v "$project_dir:/probe:ro" --entrypoint sh "$probe_image" -c 'test -f /probe/public/index.php && test -f /probe/artisan' >/dev/null 2>&1; then
+            echo "✓ Docker puede montar $proj"
+            return 0
         fi
-        if [ -f "$AUTOSTART_SRC" ]; then
-            echo "Configurando arranque automatico del stack (systemd)..."
-            SUDO_USER="${SUDO_USER:-$(whoami)}" bash "$AUTOSTART_SRC" || \
-                echo "ADVERTENCIA: no se pudo activar el arranque automatico (continuo sin abortar)"
+        echo "  Docker todavia no ve $proj montado ($i/30)"
+        sleep 2
+    done
+
+    echo "ERROR: Docker no pudo montar $project_dir dentro de /var/www/html."
+    exit 1
+}
+
+wait_for_health() {
+    local container="$1"
+    local label="$2"
+
+    echo "→ Esperando $label healthy..."
+    for i in $(seq 1 30); do
+        status=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' "$container" 2>/dev/null || echo "missing")
+        if [ "$status" = "healthy" ]; then
+            echo "✓ $label healthy"
+            return 0
         fi
+        echo "  $label estado: $status ($i/30)"
+        sleep 2
+    done
+
+    echo "✗ $label no llego a healthy. Revisa: docker logs $container --tail 80"
+    return 1
+}
+
+ensure_supervisor() {
+    local container="$1"
+    local label="$2"
+
+    echo "→ Verificando supervisor de $label..."
+    docker exec "$container" sh -c "service supervisor start >/dev/null 2>&1 || true; supervisorctl reread >/dev/null 2>&1 || true; supervisorctl update >/dev/null 2>&1 || true; supervisorctl start all >/dev/null 2>&1 || true" >/dev/null 2>&1 || true
+    for i in $(seq 1 20); do
+        if docker exec "$container" sh -c "test -f /var/www/html/artisan && supervisorctl status | grep -Eq 'laravel-worker.*RUNNING'" >/dev/null 2>&1; then
+            echo "✓ $label supervisor RUNNING"
+            return 0
+        fi
+        sleep 2
+    done
+
+    echo "✗ $label supervisor sin workers RUNNING"
+    docker exec "$container" supervisorctl status 2>/dev/null || true
+    return 1
+}
+
+ensure_scheduler() {
+    local container="$1"
+    local label="$2"
+
+    echo "→ Verificando scheduler de $label..."
+    for i in $(seq 1 20); do
+        if docker exec "$container" sh -c "test -f /var/www/html/artisan && ps aux | grep -Eq '[c]ron|[c]rond|schedule:(work|run)'" >/dev/null 2>&1; then
+            echo "✓ $label scheduler activo"
+            return 0
+        fi
+        sleep 2
+    done
+
+    echo "✗ $label scheduler no parece activo"
+    docker exec "$container" ps aux 2>/dev/null || true
+    return 1
+}
+
+wait_for_docker
+wait_for_root
+
+PROJECTS=()
+for d in "$ROOT"/*/; do
+    name=$(basename "$d")
+    if [ "$name" = "proxy" ] || [ "$name" = "certs" ]; then
+        continue
+    fi
+    if [ -f "$d/docker-compose.yml" ] && [ -f "$d/public/index.php" ]; then
+        PROJECTS+=("$name")
+    fi
+done
+
+if [ ${#PROJECTS[@]} -eq 0 ]; then
+    echo "ADVERTENCIA: no se encontraron proyectos en $ROOT"
+fi
+
+echo "Proyectos detectados: ${PROJECTS[*]:-<ninguno>}"
+for proj in "${PROJECTS[@]}"; do
+    wait_for_project_mount "$proj"
+done
+
+for proj in "${PROJECTS[@]}"; do
+    echo "→ Deteniendo $proj ..."
+    (cd "$ROOT/$proj" && docker compose down 2>/dev/null) || true
+done
+
+if [ -f "$PROXY_DIR/docker-compose.yml" ]; then
+    echo "→ Deteniendo proxy ..."
+    (cd "$PROXY_DIR" && docker compose down 2>/dev/null) || true
+fi
+
+if [ -f "$PROXY_DIR/docker-compose.yml" ]; then
+    echo "→ Levantando proxy ..."
+    (cd "$PROXY_DIR" && docker compose up -d)
+fi
+
+for proj in "${PROJECTS[@]}"; do
+    echo "→ Levantando $proj ..."
+    (cd "$ROOT/$proj" && docker compose up -d)
+done
+
+EXIT_CODE=0
+for proj in "${PROJECTS[@]}"; do
+    DIR_MOD=$(echo "$proj" | sed 's/\./_/g')
+    NGINX="nginx_${DIR_MOD}"
+    FPM="fpm_${DIR_MOD}"
+    SUPERVISOR="supervisor_${DIR_MOD}"
+    SCHEDULING="scheduling_${DIR_MOD}"
+
+    wait_for_health "$FPM" "$proj/fpm" || EXIT_CODE=1
+    if docker exec "$NGINX" test -f /var/www/html/public/index.php 2>/dev/null; then
+        echo "✓ $proj — nginx ve /var/www/html/public/index.php"
     else
-        echo "OK Arranque automatico ya configurado (pro8-autostart.service)"
+        echo "✗ $proj — nginx NO ve el webroot"
+        EXIT_CODE=1
+    fi
+    ensure_supervisor "$SUPERVISOR" "$proj" || EXIT_CODE=1
+    ensure_scheduler "$SCHEDULING" "$proj" || EXIT_CODE=1
+done
+
+if [ $EXIT_CODE -eq 0 ] && [ ${#PROJECTS[@]} -gt 0 ]; then
+    echo "✓ Todos los proyectos estan sirviendo correctamente."
+fi
+
+exit $EXIT_CODE
+EOFRESTART
+    sed -i "s|__PATH_INSTALL__|$PATH_INSTALL|g" "$RESTART_SCRIPT"
+    chmod +x "$RESTART_SCRIPT"
+
+    BASHRC="$INSTALL_HOME/.bashrc"
+    if [ -f "$BASHRC" ] && ! grep -q "alias pro8up=" "$BASHRC"; then
+        {
+            echo ""
+            echo "# pro-8: reinicio seguro del stack tras reboot (WSL2)"
+            echo "alias pro8up='bash ${RESTART_SCRIPT}'"
+        } >> "$BASHRC"
+        chown "$INSTALL_USER:$INSTALL_USER" "$BASHRC" 2>/dev/null || true
+        echo "Alias 'pro8up' instalado en $BASHRC"
+    fi
+
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "Configurando arranque automatico del stack (systemd)..."
+        WSL_CONF="/etc/wsl.conf"
+        if [ ! -f "$WSL_CONF" ] || ! grep -q '^\[boot\]' "$WSL_CONF" 2>/dev/null; then
+            {
+                echo ""
+                echo "[boot]"
+                echo "systemd=true"
+            } >> "$WSL_CONF"
+            SYSTEMD_JUST_ENABLED=1
+        elif ! grep -Eq '^\s*systemd\s*=\s*true' "$WSL_CONF"; then
+            sed -i '/^\[boot\]/a systemd=true' "$WSL_CONF"
+            SYSTEMD_JUST_ENABLED=1
+        else
+            SYSTEMD_JUST_ENABLED=0
+        fi
+
+        WAITER="/usr/local/bin/pro8-autostart.sh"
+        cat > "$WAITER" << 'EOFAUTOWAITER'
+#!/bin/bash
+set -e
+
+TARGET_USER="__INSTALL_USER__"
+PROJECT_ROOT="__PATH_INSTALL__"
+RESTART_SCRIPT="__RESTART_SCRIPT__"
+LOG="/var/log/pro8-autostart.log"
+
+exec >> "$LOG" 2>&1
+echo ""
+echo "============================================"
+echo "[$(date -Is)] pro8-autostart iniciado"
+echo "============================================"
+
+for i in $(seq 1 60); do
+    if docker info >/dev/null 2>&1; then
+        echo "[$(date -Is)] Docker responde (intento $i)"
+        break
+    fi
+    echo "[$(date -Is)] Docker no responde aun ($i/60)"
+    sleep 5
+done
+if ! docker info >/dev/null 2>&1; then
+    echo "[$(date -Is)] ERROR: Docker no respondio en 5 min"
+    exit 1
+fi
+
+for i in $(seq 1 30); do
+    if [ -d "$PROJECT_ROOT" ]; then
+        echo "[$(date -Is)] $PROJECT_ROOT accesible"
+        break
+    fi
+    echo "[$(date -Is)] Esperando $PROJECT_ROOT ($i/30)"
+    sleep 2
+done
+if [ ! -d "$PROJECT_ROOT" ]; then
+    echo "[$(date -Is)] ERROR: $PROJECT_ROOT no existe"
+    exit 1
+fi
+
+if [ ! -x "$RESTART_SCRIPT" ]; then
+    chmod +x "$RESTART_SCRIPT" 2>/dev/null || true
+fi
+if [ ! -f "$RESTART_SCRIPT" ]; then
+    echo "[$(date -Is)] ERROR: no existe $RESTART_SCRIPT"
+    exit 1
+fi
+
+echo "[$(date -Is)] Ejecutando reinicio seguro de produccion"
+set +e
+sudo -u "$TARGET_USER" -H bash "$RESTART_SCRIPT"
+EXIT_CODE=$?
+set -e
+echo "[$(date -Is)] Finalizado con exit code $EXIT_CODE"
+exit $EXIT_CODE
+EOFAUTOWAITER
+        sed -i "s|__INSTALL_USER__|$INSTALL_USER|g" "$WAITER"
+        sed -i "s|__PATH_INSTALL__|$PATH_INSTALL|g" "$WAITER"
+        sed -i "s|__RESTART_SCRIPT__|$RESTART_SCRIPT|g" "$WAITER"
+        chmod +x "$WAITER"
+        touch /var/log/pro8-autostart.log
+        chmod 644 /var/log/pro8-autostart.log
+
+        UNIT="/etc/systemd/system/pro8-autostart.service"
+        cat > "$UNIT" << EOFUNIT
+[Unit]
+Description=pro-8: reinicio seguro del stack Docker al arrancar WSL
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=$WAITER
+RemainAfterExit=no
+StandardOutput=append:/var/log/pro8-autostart.log
+StandardError=append:/var/log/pro8-autostart.log
+
+[Install]
+WantedBy=multi-user.target
+EOFUNIT
+
+        if systemctl daemon-reload 2>/dev/null && systemctl enable pro8-autostart.service 2>/dev/null; then
+            echo "Arranque automatico instalado"
+        else
+            echo "ADVERTENCIA: systemd aun no esta activo. Ejecuta 'wsl --shutdown' en PowerShell una vez."
+        fi
+        if [ "$SYSTEMD_JUST_ENABLED" = "1" ]; then
+            echo "IMPORTANTE: ejecuta 'wsl --shutdown' en PowerShell una vez para activar systemd."
+        fi
     fi
 
     # --- SSL -------------------------------------------------
@@ -837,10 +1184,12 @@ Para levantar/reiniciar:
   cd $PATH_INSTALL/$DIR
   docker compose up -d
 
-Tras reiniciar el PC (WSL2): ejecuta en una terminal WSL nueva:
-  pro8up
-Esto recrea proxy + todos los proyectos para que los bind mounts
-se re-resuelvan contra el filesystem ya montado.
+Tras reiniciar Windows (WSL2), pro8-autostart recrea automaticamente
+proxy + proyectos cuando Docker y el filesystem ya estan listos.
+Si systemd se activo por primera vez, ejecuta una vez en PowerShell:
+    wsl --shutdown
+Diagnostico:
+    tail -f /var/log/pro8-autostart.log
 EOF
 
     echo ""

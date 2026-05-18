@@ -145,8 +145,10 @@ fi
 
 # ─── Ejecutar como usuario no-root ───────────────────────────
 echo "[$(date -Is)] Ejecutando como $TARGET_USER: $TARGET_SCRIPT"
+set +e
 sudo -u "$TARGET_USER" -H bash "$TARGET_SCRIPT"
 EXIT_CODE=$?
+set -e
 echo "[$(date -Is)] Finalizado con exit code $EXIT_CODE"
 exit $EXIT_CODE
 EOF_WAITER
