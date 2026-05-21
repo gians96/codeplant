@@ -71,7 +71,7 @@ Incluye:
 - OPcache + JIT para mÃƒÂ¡ximo rendimiento
 - MariaDB con tuning optimizado
 - Redis con maxmemory 256MB
-- Soketi para Laravel Broadcasting, publicado por el mismo dominio HTTPS (`wss://DOMINIO/app/...`)
+- Soketi para Laravel Broadcasting, publicado por el subdominio reservado `wss://ws.DOMINIO/app/...`
 - Headers de seguridad en nginx
 - Credenciales aleatorias guardadas en `data-config.txt`
 
@@ -125,9 +125,11 @@ chmod +x 03-update.sh
 
 El script ejecuta en orden: `git pull` Ã¢â€ â€™ `composer install` Ã¢â€ â€™ **`composer dump-autoload -o`** (clave para detectar controllers/mÃƒÂ³dulos nuevos) Ã¢â€ â€™ `module:discover` Ã¢â€ â€™ `migrate` + `tenancy:migrate` Ã¢â€ â€™ `route:clear` / `config:clear` / `cache:clear` Ã¢â€ â€™ `config:cache` Ã¢â€ â€™ purga OPcache (`kill -USR2 1`) Ã¢â€ â€™ reinicia colas.
 
-TambiÃƒÂ©n normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
+TambiÃƒÂ©n normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes Loble deja `PUSHER_CLIENT_HOST=ws.DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
 
-> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
+> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y la ruta proxy `VIRTUAL_HOST=ws.DOMINIO`.
+
+> `ws.DOMINIO` queda reservado para infraestructura. No crees un tenant/subdominio llamado `ws`; los tenants como `cliente.DOMINIO` siguen entrando por Laravel porque el proxy usa una ruta exacta para `ws.DOMINIO` y el wildcard `*.DOMINIO` queda para tenants.
 
 > Si alguna vez ves `"Target class [Modules\Offline\Http\Controllers\XxxController] does not exist"` es porque el autoloader de Composer estÃƒÂ¡ desactualizado. El paso `composer dump-autoload -o` del script lo arregla.
 
@@ -155,7 +157,7 @@ BROADCAST_DRIVER=pusher
 PUSHER_HOST=soketi_mi-empresa_com
 PUSHER_PORT=6001
 PUSHER_SCHEME=http
-PUSHER_CLIENT_HOST=mi-empresa.com
+PUSHER_CLIENT_HOST=ws.mi-empresa.com
 PUSHER_CLIENT_PORT=443
 PUSHER_CLIENT_SCHEME=https
 ```

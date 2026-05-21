@@ -56,6 +56,53 @@ ensure_env_var() {
     fi
 }
 
+ensure_soketi_proxy_route() {
+    local websocket_host="$1"
+    local cert_name="$2"
+    local compose_file="${COMPOSE_FILE:-docker-compose.yml}"
+
+    if [ "$MODE" = "dev" ] || [ ! -f "$compose_file" ]; then
+        return
+    fi
+
+    if ! grep -q "soketi_" "$compose_file" 2>/dev/null; then
+        echo "  ADVERTENCIA: docker-compose fue generado antes de Soketi; reinstala/regenera el stack para Broadcasting en tiempo real."
+        return
+    fi
+    if ! grep -q "SOKETI_DEFAULT_APP_SECRET=" "$compose_file" 2>/dev/null; then
+        echo "  ADVERTENCIA: no se encontro el bloque environment de Soketi en $compose_file."
+        return
+    fi
+
+    set_soketi_compose_env "$compose_file" "VIRTUAL_HOST" "$websocket_host"
+    set_soketi_compose_env "$compose_file" "VIRTUAL_PORT" "6001"
+    set_soketi_compose_env "$compose_file" "VIRTUAL_PROTO" "http"
+    set_soketi_compose_env "$compose_file" "CERT_NAME" "$cert_name"
+
+    echo "  WebSocket publico: wss://${websocket_host}/app/{key}"
+    echo "  Subdominio reservado: ${websocket_host} (no crear tenant 'ws')"
+}
+
+set_soketi_compose_env() {
+    local compose_file="$1"
+    local key="$2"
+    local value="$3"
+    local tmp_file="${compose_file}.tmp.$$"
+
+    if awk -v key="$key" -v value="$value" '
+        /^[[:space:]]*soketi_[^:]*:/ { in_soketi=1 }
+        in_soketi && /^[[:space:]]*[A-Za-z0-9_-]+_[0-9]+:/ && $0 !~ /^[[:space:]]*soketi_[^:]*:/ { in_soketi=0 }
+        in_soketi && $0 ~ "^[[:space:]]*- " key "=" { print "            - " key "=" value; found=1; next }
+        { print }
+        END { exit found ? 0 : 1 }
+    ' "$compose_file" > "$tmp_file"; then
+        mv "$tmp_file" "$compose_file"
+    else
+        rm -f "$tmp_file"
+        sed -i "/SOKETI_DEFAULT_APP_SECRET=/a\\            - ${key}=${value}" "$compose_file"
+    fi
+}
+
 configure_broadcasting() {
     if [ ! -f .env ]; then
         return
@@ -72,18 +119,21 @@ configure_broadcasting() {
     else
         local host_value
         local dir_modified
+        local websocket_host
         host_value="$(env_value APP_URL_BASE)"
         if [ -z "$host_value" ]; then
             host_value="$(basename "$(pwd)")"
         fi
+        websocket_host="ws.${host_value}"
         dir_modified="$(echo "$host_value" | sed 's/\./_/g')"
         ensure_env_var "PUSHER_APP_ID" "vendemaster1"
         ensure_env_var "PUSHER_APP_KEY" "$(gen_secret)"
         ensure_env_var "PUSHER_APP_SECRET" "$(gen_secret)"
         set_env_var "PUSHER_HOST" "soketi_${dir_modified}"
-        set_env_var "PUSHER_CLIENT_HOST" "$host_value"
+        set_env_var "PUSHER_CLIENT_HOST" "$websocket_host"
         set_env_var "PUSHER_CLIENT_PORT" "443"
         set_env_var "PUSHER_CLIENT_SCHEME" "https"
+        ensure_soketi_proxy_route "$websocket_host" "$host_value"
     fi
 
     set_env_var "BROADCAST_DRIVER" "pusher"

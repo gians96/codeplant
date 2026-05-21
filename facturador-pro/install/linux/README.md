@@ -21,7 +21,9 @@ sudo ./install.sh
 
 El script pide dominio, nÃƒÂºmero de servicio y puerto MySQL.
 
-La instalaciÃƒÂ³n de producciÃƒÂ³n incluye Soketi para Laravel Broadcasting. Pro-8 publica internamente a `soketi_DOMINIO:6001` y VendeMaster se conecta por el mismo dominio HTTPS (`wss://DOMINIO/app/...`), sin abrir un puerto WebSocket adicional.
+La instalaciÃƒÂ³n de producciÃƒÂ³n incluye Soketi para Laravel Broadcasting. Pro-8 publica internamente a `soketi_DOMINIO:6001` y Loble se conecta por el subdominio reservado `wss://ws.DOMINIO/app/...`, sin abrir un puerto WebSocket adicional.
+
+`ws.DOMINIO` queda reservado para infraestructura. No crees un tenant/subdominio llamado `ws`; los tenants como `cliente.DOMINIO` siguen entrando por Laravel porque el proxy usa una ruta exacta para `ws.DOMINIO` y el wildcard `*.DOMINIO` queda para tenants.
 
 ## InstalaciÃƒÂ³n local / desarrollo
 
@@ -85,9 +87,9 @@ El script hace, en orden:
 8. `kill -USR2 1` sobre `fpm_1` (purga OPcache sin reiniciar el contenedor)
 9. `supervisorctl restart all` sobre `supervisor_1` (reinicia colas)
 
-AdemÃƒÂ¡s normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
+AdemÃƒÂ¡s normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes Loble deja `PUSHER_CLIENT_HOST=ws.DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
 
-> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
+> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y la ruta proxy `VIRTUAL_HOST=ws.DOMINIO`.
 
 > Todos los `php artisan` llevan `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 
@@ -123,7 +125,7 @@ BROADCAST_DRIVER=pusher
 PUSHER_HOST=soketi_mi-empresa_com
 PUSHER_PORT=6001
 PUSHER_SCHEME=http
-PUSHER_CLIENT_HOST=mi-empresa.com
+PUSHER_CLIENT_HOST=ws.mi-empresa.com
 PUSHER_CLIENT_PORT=443
 PUSHER_CLIENT_SCHEME=https
 ```

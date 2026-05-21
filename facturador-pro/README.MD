@@ -30,6 +30,8 @@ sudo ./install.sh
 
 El script pide dominio y número de servicio de forma interactiva.
 
+Para realtime de restaurante, el instalador publica Soketi en el subdominio reservado `ws.<dominio>` usando el mismo contenedor Soketi y el mismo proxy. No crees tenants llamados `ws`; los tenants reales siguen usando sus subdominios normales.
+
 Para agregar otro proyecto (multi-proyecto):
 
 ```sh
