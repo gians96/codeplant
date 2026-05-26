@@ -37,7 +37,7 @@ El script:
 
 1. Verifica/instala prerequisitos (`git`, `curl`, `unzip`, Docker Engine con `get.docker.com`).
 2. Instala **Bun** (runtime JS para compilar assets con Vite).
-3. Clona `pro-8` en `~/proyectos/pro-8` (pregunta rama, default `master`).
+3. Clona `pro-8` en `~/proyectos/pro-8` (pregunta rama, default `gians96`).
 4. Ejecuta `scripts/local-setup.sh` del repo Ã¢â‚¬â€ levanta nginx + fpm + mariadb + redis + soketi + scheduling + supervisor.
 5. `bun install --ignore-scripts` + `bun run build`.
 6. Corrige permisos de `storage/` y `bootstrap/cache` dentro del contenedor `fpm_pro8_local`.
@@ -55,6 +55,108 @@ Tras la instalaciÃƒÂ³n:
 
 > **Primer arranque y Docker:** si Docker acaba de instalarse, el script aÃƒÂ±ade tu usuario al grupo `docker` y termina. Cierra sesiÃƒÂ³n (o ejecuta `newgrp docker`) y vuelve a lanzarlo.
 
+## Estructura productiva y datos persistentes
+
+La actualizacion se ejecuta siempre desde la carpeta real del proyecto en produccion, por ejemplo:
+
+```text
+/var/nt-suite.pro
+/opt/proyectos/mi-empresa.com
+```
+
+Dentro de esa carpeta deben existir estos archivos y carpetas clave:
+
+```text
+.env
+docker-compose.yml
+supervisor.conf
+storage/
+vendor/
+public/
+```
+
+El `docker-compose.yml` queda estructurado con servicios numerados por instalacion:
+
+| Servicio | Funcion |
+|----------|---------|
+| `nginx_N` | Entrada HTTP interna de la app. |
+| `fpm_N` | PHP-FPM con Laravel montado en `/var/www/html`. |
+| `mariadb_N` | Base de datos principal. |
+| `redis_N` | Redis persistente. |
+| `soketi_N` | WebSocket/Broadcasting. |
+| `scheduling_N` | Scheduler de Laravel. |
+| `supervisor_N` | Colas y workers. |
+
+La data importante no vive solamente en los contenedores. La base de datos y Redis viven en volumenes Docker:
+
+```text
+mysqldataN    Data fisica de MariaDB.
+redisdataN    Data persistente de Redis.
+```
+
+Por eso el update seguro nunca elimina volumenes y nunca debe ejecutarse con `docker compose down -v`.
+
+## Pasos para actualizar sin perder informacion
+
+El script que debes ejecutar en produccion es `update.sh` en modo `prod`, sin `--skip-backup`:
+
+```bash
+cd /var/nt-suite.pro                         # o la carpeta real del proyecto
+curl -fsSLo update.sh https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/update.sh
+chmod +x update.sh
+sudo ./update.sh prod
+```
+
+Ese comando es el flujo seguro porque el script hace backup antes de `git pull`, Composer y migraciones. Si tu proyecto esta en otra ruta, cambia solo el `cd`:
+
+```bash
+cd /opt/proyectos/mi-empresa.com
+sudo ./update.sh prod
+```
+
+Antes de ejecutar puedes verificar que estas en la carpeta correcta:
+
+```bash
+pwd
+test -f .env && test -f docker-compose.yml && echo "OK estructura base"
+docker compose config --services
+docker compose ps
+docker volume ls | grep -E 'mysqldata|redisdata'
+```
+
+El script protege la informacion asi:
+
+1. Verifica `.env` y `docker-compose.yml`.
+2. Verifica que el compose tenga `soketi_N` antes de tocar Composer o migraciones.
+3. Crea backup completo en `storage/app/backups/pre-update/FECHA/`.
+4. Copia `.env`, `docker-compose.yml` y `supervisor.conf` al backup.
+5. Genera dump completo de MariaDB con `mysqldump --all-databases`.
+6. Comprime el SQL con `gzip` si esta disponible.
+7. Levanta solo Soketi con `docker compose up -d soketi_N`.
+8. Ejecuta el update de codigo y migraciones.
+9. Limpia caches, purga OPcache y reinicia workers.
+
+El backup queda con esta estructura:
+
+```text
+storage/app/backups/pre-update/20260526-153000/
++-- .env
++-- docker-compose.yml
++-- supervisor.conf
++-- all-databases.sql.gz
+```
+
+No uses estos comandos en produccion si quieres conservar data:
+
+```bash
+docker compose down -v
+docker volume rm mysqldata1 redisdata1
+docker system prune --volumes
+rm -rf docker/data/mysql
+```
+
+Si necesitas detener contenedores, usa solo `docker compose down`, sin `-v`. Para actualizar normalmente no hace falta detener toda la stack.
+
 ## Actualizar el proyecto
 
 Cuando hagas `git pull` y el commit incluye nuevos controllers, mÃƒÂ³dulos, migraciones o rutas, el autoloader de Composer y las caches de Laravel quedan desactualizados. El sÃƒÂ­ntoma tÃƒÂ­pico es:
@@ -71,23 +173,27 @@ cd /opt/proyectos/mi-empresa.com           # o donde tengas el proyecto
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/update.sh
 chmod +x update.sh
 sudo ./update.sh prod                       # "dev" para desarrollo
+# No uses --skip-backup en produccion si quieres el flujo con backup automatico.
 ```
 
 El script hace, en orden:
 
-1. `git pull`
-2. `composer install` (con `--no-dev --optimize-autoloader` en prod)
-3. **`composer dump-autoload -o`** Ã¢â€ Â clave para clases nuevas
-4. `php artisan module:discover`
-5. `migrate` + `tenancy:migrate`
-6. `route:clear` / `config:clear` / `cache:clear` / `view:clear`
-7. `config:cache` (solo en prod)
-8. `kill -USR2 1` sobre `fpm_1` (purga OPcache sin reiniciar el contenedor)
-9. `supervisorctl restart all` sobre `supervisor_1` (reinicia colas)
+1. Verifica que el compose tenga Soketi y cancela antes de tocar nada si falta.
+2. Crea backup previo en `storage/app/backups/pre-update/` (SQL completo + `.env` + compose + supervisor).
+3. Normaliza Laravel Broadcasting y levanta solo el servicio Soketi.
+4. `git pull --ff-only`.
+5. `composer install` (con `--no-dev --optimize-autoloader` en prod).
+6. **`composer dump-autoload -o`** clave para clases nuevas.
+7. `php artisan module:discover`.
+8. `migrate` + `tenancy:migrate`.
+9. `route:clear` / `config:clear` / `cache:clear` / `view:clear`.
+10. `config:cache` (solo en prod).
+11. `kill -USR2 1` sobre `fpm_1` o el servicio FPM detectado.
+12. `supervisorctl restart all` sobre el servicio supervisor detectado.
 
-AdemÃƒÂ¡s normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
+Ademas normaliza Laravel Broadcasting: si el `.env` antiguo tenia `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`. En instalaciones nuevas mantiene `PUSHER_CLIENT_HOST=DOMINIO`; si el compose antiguo se recupera con Soketi publicado por nginx-proxy, usa `PUSHER_CLIENT_HOST=ws.DOMINIO`.
 
-> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
+> Si `docker-compose.yml` fue generado antes de Soketi, el update cancela antes de migrar y muestra el bloque YAML que debes agregar. Agrega solo ese servicio dentro de `services:` y conserva intactos `mariadb_*`, `redis_*`, `volumes` y `networks`. No uses `docker compose down -v`.
 
 > Todos los `php artisan` llevan `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 
@@ -103,7 +209,7 @@ Esto actualiza solo el paquete nuevo y sus dependencias directas, evitando mover
 
 ```bash
 cd /opt/proyectos/mi-empresa.com
-git pull origin master
+git pull origin gians96
 docker compose exec -T fpm_1 sh -c "cd /var/www/html && CACHE_DRIVER=file composer install --no-dev --optimize-autoloader"
 docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer dump-autoload -o"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan module:discover"
@@ -127,6 +233,8 @@ PUSHER_CLIENT_HOST=mi-empresa.com
 PUSHER_CLIENT_PORT=443
 PUSHER_CLIENT_SCHEME=https
 ```
+
+En servidores antiguos recuperados con el subdominio directo de nginx-proxy, el cliente externo queda como `PUSHER_CLIENT_HOST=ws.mi-empresa.com`.
 
 ## VerificaciÃƒÂ³n post-actualizaciÃƒÂ³n
 

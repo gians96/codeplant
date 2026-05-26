@@ -25,7 +25,7 @@
 set -e
 
 REPO_URL="https://gitlab.com/gians96/pro-8.git"
-BRANCH="master"
+BRANCH="gians96"
 PROJECT_DEST="$HOME/proyectos/pro-8"
 
 echo ""

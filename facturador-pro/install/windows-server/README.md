@@ -121,13 +121,14 @@ cd ~/proyectos/mi-empresa.com
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/windows-server/03-update.sh
 chmod +x 03-update.sh
 ./03-update.sh prod
+./03-update.sh prod --skip-backup   # solo si ya hiciste backup manual
 ```
 
-El script ejecuta en orden: `git pull` Ã¢â€ â€™ `composer install` Ã¢â€ â€™ **`composer dump-autoload -o`** (clave para detectar controllers/mÃƒÂ³dulos nuevos) Ã¢â€ â€™ `module:discover` Ã¢â€ â€™ `migrate` + `tenancy:migrate` Ã¢â€ â€™ `route:clear` / `config:clear` / `cache:clear` Ã¢â€ â€™ `config:cache` Ã¢â€ â€™ purga OPcache (`kill -USR2 1`) Ã¢â€ â€™ reinicia colas.
+El script ejecuta en orden: verifica Soketi y cancela si el compose es antiguo, crea backup previo en `storage/app/backups/pre-update/`, normaliza Broadcasting, levanta solo Soketi, `git pull --ff-only`, `composer install`, **`composer dump-autoload -o`** (clave para detectar controllers/modulos nuevos), `module:discover`, `migrate` + `tenancy:migrate`, limpieza de caches, `config:cache`, purga OPcache (`kill -USR2 1`) y reinicia colas.
 
-TambiÃƒÂ©n normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`; para clientes mÃƒÂ³viles deja `PUSHER_CLIENT_HOST=DOMINIO`, `PUSHER_CLIENT_PORT=443` y `PUSHER_CLIENT_SCHEME=https`.
+Tambien normaliza Laravel Broadcasting: si el `.env` antiguo tenia `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`. En instalaciones nuevas mantiene `PUSHER_CLIENT_HOST=DOMINIO`; si el compose antiguo se recupera con Soketi publicado por nginx-proxy, usa `PUSHER_CLIENT_HOST=ws.DOMINIO`.
 
-> Si `docker-compose.yml` fue generado antes de Soketi, el update mostrarÃƒÂ¡ una advertencia. Para activar tiempo real en ese servidor hay que regenerar el stack con el instalador actualizado o agregar manualmente el servicio `soketi_1` y el proxy `/app`.
+> Si `docker-compose.yml` fue generado antes de Soketi, el update cancela antes de migrar y muestra el bloque YAML que debes agregar. Agrega solo ese servicio dentro de `services:` y conserva intactos `mariadb_*`, `redis_*`, `volumes` y `networks`. No uses `docker compose down -v`.
 
 > Si alguna vez ves `"Target class [Modules\Offline\Http\Controllers\XxxController] does not exist"` es porque el autoloader de Composer estÃƒÂ¡ desactualizado. El paso `composer dump-autoload -o` del script lo arregla.
 
@@ -135,7 +136,7 @@ TambiÃƒÂ©n normaliza Laravel Broadcasting: si el `.env` antiguo tenÃƒÂ­a
 
 ```bash
 cd ~/proyectos/mi-empresa.com
-git pull origin master
+git pull origin gians96
 docker compose exec -T fpm_1 sh -c "cd /var/www/html && CACHE_DRIVER=file composer install --no-dev --optimize-autoloader"
 docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer dump-autoload -o"
 docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan module:discover"
@@ -159,6 +160,8 @@ PUSHER_CLIENT_HOST=mi-empresa.com
 PUSHER_CLIENT_PORT=443
 PUSHER_CLIENT_SCHEME=https
 ```
+
+En servidores antiguos recuperados con el subdominio directo de nginx-proxy, el cliente externo queda como `PUSHER_CLIENT_HOST=ws.mi-empresa.com`.
 
 > **IMPORTANTE:** Todo comando `php artisan` en CLI debe llevar `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 
