@@ -110,6 +110,10 @@ if [ -z "$HOST" ]; then
     echo "No ha ingresado dominio, vuelva a ejecutar el script"
     exit 1
 fi
+if [[ "$HOST" == ws.* ]]; then
+    echo "ERROR: ingresa el dominio raiz (ej: nt-suite.com). ws.$HOST queda reservado para WebSocket."
+    exit 1
+fi
 
 # SERVICE NUMBER
 read -p "Numero de servicio [1 si es la primera instalacion]: " SERVICE_NUMBER
@@ -184,6 +188,7 @@ REDIS_CONTAINER_NAME="redis_${DIR_MODIFIED}"
 
 # Laravel Broadcasting / Soketi
 SOKETI_CONTAINER_NAME="soketi_${DIR_MODIFIED}"
+SOKETI_CLIENT_HOST="ws.${HOST}"
 PUSHER_APP_ID="vendemaster${SERVICE_NUMBER}"
 PUSHER_APP_KEY=$(gen_password)
 PUSHER_APP_SECRET=$(gen_password)
@@ -268,6 +273,7 @@ server {
     location / {
         try_files \$uri \$uri/ /index.php\$is_args\$args;
     }
+    # Compatibilidad: los clientes nuevos usan wss://$SOKETI_CLIENT_HOST/app.
     location /app {
         proxy_pass http://$SOKETI_CONTAINER_NAME:6001;
         proxy_http_version 1.1;
@@ -401,6 +407,10 @@ services:
             - SOKETI_DEFAULT_APP_ID=\${PUSHER_APP_ID}
             - SOKETI_DEFAULT_APP_KEY=\${PUSHER_APP_KEY}
             - SOKETI_DEFAULT_APP_SECRET=\${PUSHER_APP_SECRET}
+            - VIRTUAL_HOST=$SOKETI_CLIENT_HOST
+            - VIRTUAL_PORT=6001
+            - VIRTUAL_PROTO=http
+            - CERT_NAME=$HOST
         restart: always
     scheduling_$SERVICE_NUMBER:
         build:
@@ -516,7 +526,7 @@ EOF
     set_env_var "PUSHER_HOST" "$SOKETI_CONTAINER_NAME"
     set_env_var "PUSHER_PORT" "6001"
     set_env_var "PUSHER_SCHEME" "http"
-    set_env_var "PUSHER_CLIENT_HOST" "$HOST"
+    set_env_var "PUSHER_CLIENT_HOST" "$SOKETI_CLIENT_HOST"
     set_env_var "PUSHER_CLIENT_PORT" "443"
     set_env_var "PUSHER_CLIENT_SCHEME" "https"
 
@@ -1094,6 +1104,8 @@ EOFUNIT
 
             cp /etc/letsencrypt/live/$HOST/privkey.pem $PATH_INSTALL/certs/$HOST.key
             cp /etc/letsencrypt/live/$HOST/fullchain.pem $PATH_INSTALL/certs/$HOST.crt
+            cp /etc/letsencrypt/live/$HOST/privkey.pem $PATH_INSTALL/certs/$SOKETI_CLIENT_HOST.key
+            cp /etc/letsencrypt/live/$HOST/fullchain.pem $PATH_INSTALL/certs/$SOKETI_CLIENT_HOST.crt
 
             docker compose exec -T fpm_$SERVICE_NUMBER php artisan config:cache
             docker compose exec -T fpm_$SERVICE_NUMBER php artisan cache:clear
@@ -1139,7 +1151,8 @@ EOFUNIT
     echo "----------------------------------------------"
     echo "Broadcasting"
     echo "Soketi interno: $SOKETI_CONTAINER_NAME:6001"
-    echo "WebSocket cliente: wss://$HOST/app/{key}"
+    echo "WebSocket cliente: wss://$SOKETI_CLIENT_HOST/app/{key}"
+    echo "Subdominio reservado: $SOKETI_CLIENT_HOST (no crear tenant 'ws')"
     echo "=============================================="
 
     # Credenciales en archivo
@@ -1166,7 +1179,8 @@ Password: null
 ----------------------------------------------
 Broadcasting
 Soketi interno: $SOKETI_CONTAINER_NAME:6001
-WebSocket cliente: wss://$HOST/app/{key}
+WebSocket cliente: wss://$SOKETI_CLIENT_HOST/app/{key}
+Subdominio reservado: $SOKETI_CLIENT_HOST (no crear tenant 'ws')
 ----------------------------------------------
 Service Number: $SERVICE_NUMBER
 Version PHP: $VERSION_PHP_IMAGE
