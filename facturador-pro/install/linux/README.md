@@ -193,7 +193,7 @@ El script hace, en orden:
 
 Ademas normaliza Laravel Broadcasting: si el `.env` antiguo tenia `PUSHER_HOST=127.0.0.1`, lo cambia al contenedor `soketi_DOMINIO`. En instalaciones nuevas mantiene `PUSHER_CLIENT_HOST=DOMINIO`; si el compose antiguo se recupera con Soketi publicado por nginx-proxy, usa `PUSHER_CLIENT_HOST=ws.DOMINIO`.
 
-> Si `docker-compose.yml` fue generado antes de Soketi, el update cancela antes de migrar y muestra el bloque YAML que debes agregar. Agrega solo ese servicio dentro de `services:` y conserva intactos `mariadb_*`, `redis_*`, `volumes` y `networks`. No uses `docker compose down -v`.
+> Si `docker-compose.yml` fue generado antes de Soketi, el update agrega automaticamente solo el servicio `soketi_N` dentro de `services:`, crea un respaldo `docker-compose.yml.backup-before-soketi-FECHA`, valida el compose con `docker compose config --services` y continua con el backup SQL normal. Conserva intactos `mariadb_*`, `redis_*`, `volumes` y `networks`. No uses `docker compose down -v`.
 
 > Todos los `php artisan` llevan `CACHE_DRIVER=file` para evitar el bug del driver `redis_tenancy`.
 

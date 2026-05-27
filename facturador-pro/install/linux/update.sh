@@ -92,7 +92,7 @@ compose_has_soketi() {
     grep -Eq '^[[:space:]]+soketi_[0-9]+:' "$compose" 2>/dev/null
 }
 
-print_soketi_compose_hint() {
+render_soketi_compose_service() {
     local websocket_host="$1"
     local cert_name="$2"
     local service_number
@@ -103,8 +103,6 @@ print_soketi_compose_hint() {
     soketi_container="soketi_$(echo "$cert_name" | sed 's/\./_/g')"
 
     cat << EOF
-   Agrega este servicio dentro de services: en docker-compose.yml y vuelve a ejecutar el update:
-
     ${soketi_service}:
         image: quay.io/soketi/soketi:1.6-16-debian
         container_name: ${soketi_container}
@@ -118,10 +116,86 @@ print_soketi_compose_hint() {
             - VIRTUAL_PROTO=http
             - CERT_NAME=${cert_name}
         restart: always
+EOF
+}
+
+print_soketi_compose_hint() {
+    local websocket_host="$1"
+    local cert_name="$2"
+
+    cat << EOF
+   Agrega este servicio dentro de services: en docker-compose.yml y vuelve a ejecutar el update:
+
+$(render_soketi_compose_service "$websocket_host" "$cert_name")
 
     No ejecutes docker compose down -v ni borres volumenes mysqldata*/redisdata*.
     No levantes Soketi manualmente antes; vuelve a ejecutar este script y el creara PUSHER_*.
 EOF
+}
+
+insert_soketi_compose_service() {
+    local websocket_host="$1"
+    local cert_name="$2"
+    local compose
+    local backup
+    local tmp
+    local timestamp
+    local soketi_service
+    local block
+
+    compose="$(compose_file)"
+    soketi_service="$(infer_compose_service soketi)"
+
+    if ! grep -q '^services:[[:space:]]*$' "$compose" 2>/dev/null; then
+        echo "ERROR: $compose no tiene una seccion services: valida. Aborto."
+        print_soketi_compose_hint "$websocket_host" "$cert_name"
+        exit 1
+    fi
+
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    backup="${compose}.backup-before-soketi-${timestamp}"
+    tmp="${compose}.tmp.$$"
+    cp -p "$compose" "$backup"
+
+    block="$(render_soketi_compose_service "$websocket_host" "$cert_name")"
+
+    awk -v block="$block" '
+        /^services:[[:space:]]*$/ { in_services=1; print; next }
+        in_services && !inserted && /^[^[:space:]#][^:]*:[[:space:]]*$/ {
+            print block "\n"
+            inserted=1
+            in_services=0
+        }
+        { print }
+        END {
+            if (in_services && !inserted) {
+                print block
+            }
+        }
+    ' "$compose" > "$tmp"
+
+    mv "$tmp" "$compose"
+
+    if ! docker compose config --services >/tmp/pro8-compose-services.$$ 2>/tmp/pro8-compose-config-error.$$; then
+        cp -p "$backup" "$compose"
+        echo "ERROR: no se pudo validar $compose despues de agregar Soketi."
+        cat /tmp/pro8-compose-config-error.$$ 2>/dev/null || true
+        rm -f /tmp/pro8-compose-services.$$ /tmp/pro8-compose-config-error.$$
+        echo "Se restauro el compose original desde $backup. Aborto."
+        exit 1
+    fi
+
+    if ! grep -qx "$soketi_service" /tmp/pro8-compose-services.$$; then
+        cp -p "$backup" "$compose"
+        rm -f /tmp/pro8-compose-services.$$ /tmp/pro8-compose-config-error.$$
+        echo "ERROR: $compose valido, pero no registra el servicio $soketi_service."
+        echo "Se restauro el compose original desde $backup. Aborto."
+        exit 1
+    fi
+
+    rm -f /tmp/pro8-compose-services.$$ /tmp/pro8-compose-config-error.$$
+    echo "OK se agrego $soketi_service a $compose."
+    echo "   Backup previo del compose: $backup"
 }
 
 preflight_broadcasting() {
@@ -164,19 +238,27 @@ preflight_broadcasting() {
         exit 1
     fi
 
-    echo "ERROR: docker-compose.yml fue generado antes de Soketi."
-    print_soketi_compose_hint "ws.${host_value}" "$host_value"
-    exit 1
+    echo "ADVERTENCIA: docker-compose.yml fue generado antes de Soketi."
+    echo "-> agregando servicio Soketi sin tocar volumenes ni servicios existentes"
+    insert_soketi_compose_service "ws.${host_value}" "$host_value"
 }
 
 set_soketi_compose_env() {
     local key="$1"
     local value="$2"
     local compose
+    local service
+    local tmp
     compose="$(compose_file)"
-    if grep -q "${key}=" "$compose" 2>/dev/null; then
-        sed -i "/${key}=/c\\            - ${key}=${value}" "$compose"
-    fi
+    service="$(infer_compose_service soketi)"
+    tmp="${compose}.tmp.$$"
+    awk -v service="$service" -v key="$key" -v value="$value" '
+        $0 ~ "^[[:space:]]+" service ":[[:space:]]*$" { in_soketi=1; print; next }
+        in_soketi && /^[^[:space:]#][^:]*:[[:space:]]*$/ { in_soketi=0 }
+        in_soketi && $0 ~ "^[[:space:]]+[A-Za-z0-9_-]+_[0-9]+:[[:space:]]*$" { in_soketi=0 }
+        in_soketi && index($0, "- " key "=") > 0 { print "            - " key "=" value; next }
+        { print }
+    ' "$compose" > "$tmp" && mv "$tmp" "$compose"
 }
 
 ensure_soketi_proxy_route() {
