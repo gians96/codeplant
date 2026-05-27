@@ -144,7 +144,7 @@ insert_soketi_compose_service() {
     local block
 
     compose="$(compose_file)"
-    soketi_service="$(infer_compose_service soketi)"
+    soketi_service="soketi_$(infer_service_number)"
 
     if ! grep -q '^services:[[:space:]]*$' "$compose" 2>/dev/null; then
         echo "ERROR: $compose no tiene una seccion services: valida. Aborto."
