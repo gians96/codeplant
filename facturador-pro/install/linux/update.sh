@@ -402,7 +402,7 @@ git pull --ff-only
 
 echo "-> composer install"
 if [ "$MODE" = "prod" ]; then
-    docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file composer install --no-dev --optimize-autoloader" || {
+    docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file composer install" || {
         echo "-> composer lock desactualizado; actualizando solo pusher/pusher-php-server"
         docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file composer update pusher/pusher-php-server --with-dependencies --no-dev --optimize-autoloader"
     }
