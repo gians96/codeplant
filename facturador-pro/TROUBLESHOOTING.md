@@ -6,6 +6,10 @@
 - [Análisis de Tráfico y Requests](#análisis-de-tráfico-y-requests)
 - [Herramientas de Monitoreo](#herramientas-de-monitoreo)
 
+## Guías puntuales
+
+- [`demo.localhost` devuelve HTTP 500 por `tenancy_demo`](troubleshooting/demo-localhost-tenancy-demo-access-denied.md)
+
 ---
 
 ## 🚨 Problema de Scheduling con Alto CPU

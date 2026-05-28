@@ -14,8 +14,13 @@ facturador-pro/
 │       ├── 02-install-dev.sh     ← Fase 2: Desarrollo (sin proxy ni SSL)
 │       └── README.md             ← Documentación detallada
 ├── README.MD                     ← Este archivo
-└── TROUBLESHOOTING.md
+├── TROUBLESHOOTING.md
+└── troubleshooting/              ← Guías puntuales de errores recurrentes
 ```
+
+Guía útil si vuelve a fallar el tenant local:
+
+- [`demo.localhost` devuelve HTTP 500 por `tenancy_demo`](troubleshooting/demo-localhost-tenancy-demo-access-denied.md)
 
 ---
 

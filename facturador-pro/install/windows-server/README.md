@@ -225,6 +225,19 @@ bash scripts/pro8-restart.sh
 
 No uses `docker compose down -v` para este caso; borraria datos locales.
 
+### SQLSTATE 1045 con tenancy_demo en demo.localhost
+
+Si despues de `bash scripts/local-setup.sh` ves `Access denied for user
+'tenancy_demo'`, la `APP_KEY` cambio y la password MySQL derivada por Hyn quedo
+desincronizada. El setup/update local actual conserva `APP_KEY` y sincroniza
+tenants; para repararlo manual:
+
+```bash
+cd ~/proyectos/pro-8
+docker exec fpm_pro8_local sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan tenancy:key:update"
+docker exec fpm_pro8_local sh -c "CACHE_DRIVER=file php artisan config:cache"
+```
+
 ### Docker no arranca al reiniciar Windows
 
 ```bash

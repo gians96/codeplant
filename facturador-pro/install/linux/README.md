@@ -67,6 +67,15 @@ El update local verifica que FPM vea `composer.json` y `artisan` en
 recrea el stack con `docker compose down` + `up -d`, sin `-v`, y conserva los
 datos locales.
 
+Si `demo.localhost:8080/login` devuelve `SQLSTATE[HY000] [1045] Access denied
+for user 'tenancy_demo'`, sincroniza las claves derivadas de Hyn:
+
+```bash
+cd ~/proyectos/pro-8
+docker exec fpm_pro8_local sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan tenancy:key:update"
+docker exec fpm_pro8_local sh -c "CACHE_DRIVER=file php artisan config:cache"
+```
+
 ## Estructura productiva y datos persistentes
 
 La actualizacion se ejecuta siempre desde la carpeta real del proyecto en produccion, por ejemplo:
