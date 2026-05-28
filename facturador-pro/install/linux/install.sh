@@ -164,8 +164,6 @@ echo "Configurando proxy"
 docker network create proxynet
 mkdir -p $PATH_INSTALL/proxy
 cat << EOF > $PATH_INSTALL/proxy/docker-compose.yml
-version: '3'
-
 services:
     proxy:
         image: rash07/nginx-proxy:4.0
@@ -253,8 +251,6 @@ RUN ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
 EOFNGINXDF
 
 cat << EOF > $PATH_INSTALL/$DIR/docker-compose.yml
-version: '3'
-
 services:
     nginx_$SERVICE_NUMBER:
         build:

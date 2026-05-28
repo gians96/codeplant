@@ -213,8 +213,6 @@ if [ "$SERVICE_NUMBER" = '1' ]; then
     docker network create proxynet 2>/dev/null || true
     mkdir -p $PATH_INSTALL/proxy
     cat << EOF > $PATH_INSTALL/proxy/docker-compose.yml
-version: '3'
-
 services:
     proxy:
         image: rash07/nginx-proxy:4.0
@@ -322,8 +320,6 @@ EOFNGINXDF
 
     # --- docker-compose.yml ----------------------------------
     cat << EOF > $PATH_INSTALL/$DIR/docker-compose.yml
-version: '3'
-
 services:
     nginx_$SERVICE_NUMBER:
         build:
@@ -429,7 +425,7 @@ services:
             redis_$SERVICE_NUMBER:
                 condition: service_healthy
         healthcheck:
-            test: ["CMD-SHELL", "test -f /var/www/html/artisan && for cmdline in /proc/[0-9]*/cmdline; do tr '\000' ' ' < \$\$cmdline 2>/dev/null; echo; done | grep -Eq '(^| )([c]ron|[c]rond)( |$)|artisan schedule:(wor[k]|ru[n])'"]
+            test: ["CMD-SHELL", "test -f /var/www/html/artisan && grep -Eq '^(cron|crond)$' /proc/[0-9]*/comm 2>/dev/null"]
             interval: 30s
             timeout: 5s
             retries: 3
@@ -748,13 +744,13 @@ EOFMYCNF
 
     echo "Verificando scheduler..."
     for i in {1..20}; do
-        if docker compose exec -T scheduling_$SERVICE_NUMBER sh -c "test -f /var/www/html/artisan && for cmdline in /proc/[0-9]*/cmdline; do tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done | grep -Eq '(^| )([c]ron|[c]rond)( |$)|artisan schedule:(wor[k]|ru[n])'" >/dev/null 2>&1; then
+        if docker compose exec -T scheduling_$SERVICE_NUMBER sh -c "test -f /var/www/html/artisan && grep -Eq '^(cron|crond)$' /proc/[0-9]*/comm 2>/dev/null" >/dev/null 2>&1; then
             echo "Scheduler activo"
             break
         fi
         if [ $i -eq 20 ]; then
             echo "ERROR: scheduler no parece estar activo"
-            docker compose exec -T scheduling_$SERVICE_NUMBER sh -c "for cmdline in /proc/[0-9]*/cmdline; do printf '%s ' \"\$cmdline\"; tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done" 2>/dev/null || true
+            docker compose exec -T scheduling_$SERVICE_NUMBER sh -c "for comm in /proc/[0-9]*/comm; do printf '%s ' \"\$comm\"; cat \"\$comm\" 2>/dev/null; done" 2>/dev/null || true
             exit 1
         fi
         sleep 2
@@ -878,7 +874,7 @@ ensure_scheduler() {
 
     echo "→ Verificando scheduler de $label..."
     for i in $(seq 1 20); do
-        if docker exec "$container" sh -c "test -f /var/www/html/artisan && for cmdline in /proc/[0-9]*/cmdline; do tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done | grep -Eq '(^| )([c]ron|[c]rond)( |$)|artisan schedule:(wor[k]|ru[n])'" >/dev/null 2>&1; then
+        if docker exec "$container" sh -c "test -f /var/www/html/artisan && grep -Eq '^(cron|crond)$' /proc/[0-9]*/comm 2>/dev/null" >/dev/null 2>&1; then
             echo "✓ $label scheduler activo"
             return 0
         fi
@@ -886,7 +882,7 @@ ensure_scheduler() {
     done
 
     echo "✗ $label scheduler no parece activo"
-    docker exec "$container" sh -c "for cmdline in /proc/[0-9]*/cmdline; do printf '%s ' \"\$cmdline\"; tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done" 2>/dev/null || true
+    docker exec "$container" sh -c "for comm in /proc/[0-9]*/comm; do printf '%s ' \"\$comm\"; cat \"\$comm\" 2>/dev/null; done" 2>/dev/null || true
     return 1
 }
 

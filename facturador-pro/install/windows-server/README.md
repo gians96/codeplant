@@ -112,6 +112,18 @@ docker compose up -d
 docker compose logs -f
 ```
 
+### Actualizar codigo (desarrollo local)
+
+```bash
+cd ~/proyectos/pro-8
+bash scripts/local-update.sh
+```
+
+El update local valida que el contenedor FPM vea `composer.json` y `artisan` en
+`/var/www/html`. Si WSL/Docker dejo el bind mount vacio despues de un reinicio,
+el script recrea el stack con `docker compose down` + `up -d`, sin `-v`, y luego
+continua con Composer, Bun y migraciones.
+
 ### Actualizar cÃƒÂ³digo (producciÃƒÂ³n)
 
 **OpciÃƒÂ³n A Ã¢â‚¬â€ script todo-en-uno (recomendado):**
@@ -198,6 +210,20 @@ docker compose up -d --build --force-recreate nginx_1 fpm_1
 ```
 
 > La config de Nginx estÃƒÂ¡ horneada dentro de la imagen (build-time), **no depende de bind mounts**. Si necesitas cambiar la config, edita `proxy/fpms/DOMINIO/default` y reconstruye con `--build`.
+
+### Composer no encuentra composer.json en /var/www/html
+
+En desarrollo local con WSL2, el contenedor puede quedar con `/var/www/html`
+vacio si Docker arranco antes de que WSL exponga el filesystem del usuario.
+
+```bash
+cd ~/proyectos/pro-8
+bash scripts/local-update.sh
+# o solo re-montar el stack:
+bash scripts/pro8-restart.sh
+```
+
+No uses `docker compose down -v` para este caso; borraria datos locales.
 
 ### Docker no arranca al reiniciar Windows
 

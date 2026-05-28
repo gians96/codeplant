@@ -55,6 +55,18 @@ Tras la instalaciÃƒÂ³n:
 
 > **Primer arranque y Docker:** si Docker acaba de instalarse, el script aÃƒÂ±ade tu usuario al grupo `docker` y termina. Cierra sesiÃƒÂ³n (o ejecuta `newgrp docker`) y vuelve a lanzarlo.
 
+Para actualizar el entorno local/desarrollo:
+
+```bash
+cd ~/proyectos/pro-8
+bash scripts/local-update.sh
+```
+
+El update local verifica que FPM vea `composer.json` y `artisan` en
+`/var/www/html`. Si el bind mount quedo vacio tras reiniciar Docker/WSL,
+recrea el stack con `docker compose down` + `up -d`, sin `-v`, y conserva los
+datos locales.
+
 ## Estructura productiva y datos persistentes
 
 La actualizacion se ejecuta siempre desde la carpeta real del proyecto en produccion, por ejemplo:

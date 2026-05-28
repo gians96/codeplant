@@ -135,7 +135,7 @@ ensure_scheduler() {
 
     echo "→ Verificando scheduler de $label..."
     for i in $(seq 1 20); do
-        if docker exec "$container" sh -c "test -f /var/www/html/artisan && for cmdline in /proc/[0-9]*/cmdline; do tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done | grep -Eq '(^| )([c]ron|[c]rond)( |$)|artisan schedule:(wor[k]|ru[n])'" >/dev/null 2>&1; then
+        if docker exec "$container" sh -c "test -f /var/www/html/artisan && grep -Eq '^(cron|crond)$' /proc/[0-9]*/comm 2>/dev/null" >/dev/null 2>&1; then
             echo "✓ $label scheduler activo"
             return 0
         fi
@@ -143,7 +143,7 @@ ensure_scheduler() {
     done
 
     echo "✗ $label scheduler no parece activo"
-    docker exec "$container" sh -c "for cmdline in /proc/[0-9]*/cmdline; do printf '%s ' \"\$cmdline\"; tr '\000' ' ' < \"\$cmdline\" 2>/dev/null; echo; done" 2>/dev/null || true
+    docker exec "$container" sh -c "for comm in /proc/[0-9]*/comm; do printf '%s ' \"\$comm\"; cat \"\$comm\" 2>/dev/null; done" 2>/dev/null || true
     return 1
 }
 

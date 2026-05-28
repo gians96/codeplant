@@ -127,7 +127,7 @@ fi
 
 # ─── Ejecutar local-setup.sh ─────────────────────────────────
 echo ""
-echo "Ejecutando local-setup.sh (levanta 6 containers)..."
+echo "Ejecutando local-setup.sh (levanta 7 containers)..."
 echo ""
 cd "$PROJECT_DEST"
 bash scripts/local-setup.sh
