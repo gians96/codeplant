@@ -81,7 +81,7 @@ request a `192.168.1.100`, y el servidor identifica el tenant correctamente.
 Conectate por SSH a la VM del servidor y ejecuta:
 
 ```bash
-cd /opt/proyectos/fe.consurtrading.org
+cd /opt/proyectos/fe.consurtrading.org/app
 bash scripts/list-tenant-hosts.sh
 ```
 
@@ -219,7 +219,7 @@ vayan a usar esa empresa** necesitan la nueva linea en `hosts`.
 2. En el servidor:
 
 ```bash
-cd /opt/proyectos/fe.consurtrading.org
+cd /opt/proyectos/fe.consurtrading.org/app
 bash scripts/list-tenant-hosts.sh
 ```
 
@@ -291,7 +291,7 @@ config system dns-database → zona "fe.consurtrading.org":
 
 - El **DHCP** de la LAN debe entregar el FortiGate como servidor DNS.
 - Con esto, **retirar** las entradas pro-8 del hosts de las PCs.
-- El checklist completo por dominio queda en `/opt/proyectos/<dominio>-onprem.txt`
+- El checklist completo por dominio queda en `/opt/proyectos/<dominio>/<dominio>-onprem.txt`
   (seccion "PENDIENTES ADMIN DE RED").
 
 ---
@@ -322,7 +322,7 @@ Debe mostrar `192.168.1.100` (o la IP LAN correcta).
 2. Confirmar que el stack esta arriba en el servidor:
 
 ```bash
-cd /opt/proyectos/fe.consurtrading.org
+cd /opt/proyectos/fe.consurtrading.org/app
 docker compose ps
 ```
 

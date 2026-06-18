@@ -15,7 +15,8 @@
 
 set -e
 
-ROOT="$(pwd)"
+# La raiz es DONDE VIVE EL SCRIPT (no el directorio actual). Override: --root
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=""
 BRANCH=""
 EXTRA=()
@@ -30,17 +31,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Si se ejecuta DENTRO de un proyecto, subir a la raiz para listar hermanos
+# Si se ejecuta DENTRO de un proyecto (<dominio>/app), subir a la raiz.
 if [ -f "$ROOT/docker-compose.yml" ] && [ -f "$ROOT/artisan" ]; then
-    ROOT="$(dirname "$ROOT")"
+    ROOT="$(cd "$ROOT/../.." && pwd)"
 fi
 
 # --- Recolectar dominios instalados -------------------------------
 PROJECTS=()
 for d in "$ROOT"/*/; do
     dom="$(basename "$d")"
-    [ "$dom" = "proxy" ] && continue
-    [ -f "${d}docker-compose.yml" ] && [ -f "${d}artisan" ] && PROJECTS+=("$dom")
+    case "$dom" in _*) continue ;; esac
+    [ -f "${d}app/docker-compose.yml" ] && [ -f "${d}app/artisan" ] && PROJECTS+=("$dom")
 done
 
 if [ ${#PROJECTS[@]} -eq 0 ]; then
@@ -59,7 +60,7 @@ if [ -z "$DOMAIN" ]; then
     DOMAIN="${PROJECTS[$((sel-1))]}"
 fi
 
-PROJECT_DIR="$ROOT/$DOMAIN"
+PROJECT_DIR="$ROOT/$DOMAIN/app"
 if [ ! -f "$PROJECT_DIR/scripts/onprem-update.sh" ]; then
     echo "ERROR: no encuentro scripts/onprem-update.sh en $PROJECT_DIR"
     exit 1

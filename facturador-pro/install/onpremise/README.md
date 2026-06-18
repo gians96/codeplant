@@ -17,7 +17,7 @@ choquen entre si.
 ## Indice
 
 1. [Que resuelve esta instalacion](#1-que-resuelve-esta-instalacion)
-2. [Caso de referencia: Consurtrading](#2-caso-de-referencia-consurtrading)
+2. [Caso de referencia: dominio](#2-caso-de-referencia-dominio)
 3. [Como funciona APP_URL_BASE y los tenants](#3-como-funciona-app_url_base-y-los-tenants)
 4. [Requisitos del servidor](#4-requisitos-del-servidor)
 5. [Estructura en disco despues de instalar](#5-estructura-en-disco-despues-de-instalar)
@@ -62,22 +62,22 @@ ssl.sh OPCIONAL                      ssl.sh ejecutado
 > nombre real via hosts/DNS FortiGate). Ver [seccion 10](#10-ssl-wildcard-emitir-o-renovar-sslsh).
 
 **No hay migracion de base de datos** entre fases porque `APP_URL_BASE` es el
-dominio final desde la instalacion (ej. `fe.consurtrading.org`). Los `fqdn` de
-cada empresa (`empresa1.fe.consurtrading.org`) ya quedan correctos en la tabla
+dominio final desde la instalacion (ej. `fe.dominio.org`). Los `fqdn` de
+cada empresa (`empresa1.fe.dominio.org`) ya quedan correctos en la tabla
 `hostnames`.
 
 ---
 
-## 2. Caso de referencia: Consurtrading
+## 2. Caso de referencia: dominio
 
 | Nombre | Uso |
 |--------|-----|
-| `consurtrading.org` | Web oficial (ajena a este sistema) |
-| `reportes.consurtrading.org` | Subdominio de reportes (ajeno) |
-| **`fe.consurtrading.org`** | **Base del facturador** — panel central de gestion |
-| `empresa1.fe.consurtrading.org` | Tenant (empresa 1) |
-| `empresa2.fe.consurtrading.org` | Tenant (empresa 2) |
-| `ws.fe.consurtrading.org` | WebSocket / Broadcasting (Soketi) — **reservado, no crear tenant "ws"** |
+| `dominio.org` | Web oficial (ajena a este sistema) |
+| `reportes.dominio.org` | Subdominio de reportes (ajeno) |
+| **`fe.dominio.org`** | **Base del facturador** — panel central de gestion |
+| `empresa1.fe.dominio.org` | Tenant (empresa 1) |
+| `empresa2.fe.dominio.org` | Tenant (empresa 2) |
+| `ws.fe.dominio.org` | WebSocket / Broadcasting (Soketi) — **reservado, no crear tenant "ws"** |
 
 El instalador es **generico**: al ejecutar `install.sh` puedes poner cualquier
 dominio base (ej. `fact.otraempresa.com`) para otro cliente en el mismo servidor.
@@ -90,28 +90,28 @@ Pro-8 usa **hyn/multi-tenant**. El flujo es:
 
 ```text
 .env
-  APP_URL_BASE=fe.consurtrading.org    ← sufijo raiz (NO es la URL de cada tenant)
+  APP_URL_BASE=fe.dominio.org    ← sufijo raiz (NO es la URL de cada tenant)
   APP_URL=http://${APP_URL_BASE}       ← URL del panel central
 
 Al CREAR un cliente (tenant):
   subdominio ingresado: "empresa1"
   fqdn guardado en BD:  empresa1 + "." + APP_URL_BASE
-                      = empresa1.fe.consurtrading.org
+                      = empresa1.fe.dominio.org
 
 En CADA request HTTP:
-  1. El navegador envia header Host: empresa1.fe.consurtrading.org
+  1. El navegador envia header Host: empresa1.fe.dominio.org
   2. hyn busca ese Host en la tabla hostnames.fqdn
   3. Si coincide → conecta la BD del tenant y carga rutas de tenant
-  4. Si Host = fe.consurtrading.org → panel central (system)
+  4. Si Host = fe.dominio.org → panel central (system)
 ```
 
 **Por que no funciona `empresa1.192.168.1.100`:** los subdominios de una IP no
 son nombres DNS validos. El header `Host` debe ser un nombre que exista en
 `hostnames.fqdn`. Por eso en Fase 1 se usa el archivo `hosts` de cada PC para
-resolver `empresa1.fe.consurtrading.org` → `192.168.1.100`.
+resolver `empresa1.fe.dominio.org` → `192.168.1.100`.
 
 **Enrutamiento automatico de empresas nuevas:** el contenedor nginx declara
-`VIRTUAL_HOST="fe.consurtrading.org, *.fe.consurtrading.org, 192.168.1.100"`.
+`VIRTUAL_HOST="fe.dominio.org, *.fe.dominio.org, 192.168.1.100"`.
 Cada tenant nuevo funciona sin tocar nginx ni reiniciar contenedores.
 
 ---
@@ -135,72 +135,80 @@ Opcional para Fase 2: `certbot` (se instala automaticamente si falta).
 
 ## 5. Estructura en disco despues de instalar
 
-Ejemplo con raiz `/opt/proyectos` y un dominio `fe.consurtrading.org`:
+Ejemplo con raiz `/opt/proyectos` y un dominio `fe.dominio.org`:
 
 ```text
 /opt/proyectos/
-├── install.sh                          ← scripts de esta carpeta (copiados aqui)
+├── install.sh                          ← scripts de esta carpeta (descargados aqui)
 ├── update.sh
 ├── ssl.sh                              ← emite O renueva el wildcard SSL
+├── uninstall.sh                        ← elimina un dominio (contenedores+volumenes+carpeta)
 ├── set-hosts.sh / set-hosts.ps1
 │
-├── proxy/                              ← COMPARTIDO (una sola vez)
-│   └── docker-compose.yml              ← nginx-proxy en 80/443
+├── _infra/                             ← COMPARTIDO por todos los dominios
+│   ├── proxy/
+│   │   └── docker-compose.yml          ← nginx-proxy en 80/443
+│   └── certs/                          ← certificados SSL (Fase 2)
+│       ├── fe.dominio.org.crt
+│       ├── fe.dominio.org.key
+│       ├── ws.fe.dominio.org.crt
+│       └── ws.fe.dominio.org.key
 │
-├── certs/                              ← COMPARTIDO (certificados SSL Fase 2)
-│   ├── fe.consurtrading.org.crt
-│   ├── fe.consurtrading.org.key
-│   ├── ws.fe.consurtrading.org.crt
-│   └── ws.fe.consurtrading.org.key
-│
-├── fe.consurtrading.org/               ← PROYECTO (uno por dominio)
-│   ├── .env                            ← APP_URL_BASE, credenciales, PUSHER_*
-│   ├── docker-compose.yml
-│   ├── supervisor.conf
-│   ├── artisan
-│   ├── storage/                        ← datos de app + backups pre-update
-│   ├── docker/
-│   │   ├── nginx/default               ← config nginx con proxy /app (Soketi)
-│   │   ├── php-fpm/
-│   │   ├── mariadb/my.cnf
-│   │   ├── scheduling/
-│   │   └── supervisor/
-│   └── scripts/
-│       ├── onprem-setup.sh             ← motor de despliegue
-│       ├── onprem-update.sh
-│       └── list-tenant-hosts.sh
-│
-├── fe.consurtrading.org-onprem.txt     ← credenciales generadas (admin, MySQL, contenedores)
+├── fe.dominio.org/               ← PROYECTO (uno por dominio, autocontenido)
+│   ├── app/                            ← repo pro-8 clonado
+│   │   ├── .env                        ← APP_URL_BASE, credenciales, COMPOSE_PROJECT_NAME
+│   │   ├── docker-compose.yml
+│   │   ├── supervisor.conf
+│   │   ├── artisan
+│   │   ├── storage/                    ← datos de app + backups pre-update
+│   │   ├── docker/
+│   │   │   ├── nginx/default           ← config nginx con proxy /app (Soketi)
+│   │   │   ├── php-fpm/
+│   │   │   ├── mariadb/my.cnf
+│   │   │   ├── scheduling/
+│   │   │   └── supervisor/
+│   │   └── scripts/
+│   │       ├── onprem-setup.sh         ← motor de despliegue
+│   │       ├── onprem-update.sh
+│   │       └── list-tenant-hosts.sh
+│   └── fe.dominio.org-onprem.txt ← credenciales (admin, MySQL, contenedores)
 │
 └── otro-dominio.com/                   ← segundo dominio (misma estructura)
-    └── ...
+    ├── app/
+    └── otro-dominio.com-onprem.txt
 ```
 
 ### Contenedores por dominio
 
-Para `fe.consurtrading.org` (puntos → guiones bajos en nombres Docker):
+Para `fe.dominio.org` (puntos → guiones bajos en nombres Docker):
 
 | Contenedor | Funcion |
 |------------|---------|
-| `nginx_fe_consurtrading_org` | Nginx interno de la app |
-| `fpm_fe_consurtrading_org` | PHP-FPM 8.2 + Laravel |
-| `mariadb_fe_consurtrading_org` | MariaDB 10.5.6 |
-| `redis_fe_consurtrading_org` | Redis (colas, sesiones) |
-| `soketi_fe_consurtrading_org` | WebSocket (Soketi) |
-| `scheduling_fe_consurtrading_org` | Laravel scheduler (cron) |
-| `supervisor_fe_consurtrading_org` | Queue workers |
+| `nginx_fe_dominio_org` | Nginx interno de la app |
+| `fpm_fe_dominio_org` | PHP-FPM 8.2 + Laravel |
+| `mariadb_fe_dominio_org` | MariaDB 10.5.6 |
+| `redis_fe_dominio_org` | Redis (colas, sesiones) |
+| `soketi_fe_dominio_org` | WebSocket (Soketi) |
+| `scheduling_fe_dominio_org` | Laravel scheduler (cron) |
+| `supervisor_fe_dominio_org` | Queue workers |
 | `proxy-proxy-1` (compartido) | nginx-proxy — enruta por `VIRTUAL_HOST` |
 
 ### Volumenes Docker (por dominio, NO borrar)
 
 ```text
-feconsurtradingorg_mysqldata1      ← base de datos system + tenants
-feconsurtradingorg_redisdata1      ← datos persistentes Redis
+fe_dominio_org_mysqldata1    ← base de datos system + tenants
+fe_dominio_org_redisdata1    ← datos persistentes Redis
 ```
 
-El prefijo del volumen lo genera Docker Compose con el nombre de la carpeta
-del proyecto **normalizado** (elimina los puntos: `fe.consurtrading.org` →
-`feconsurtradingorg`). Verificar con `docker volume ls`.
+El prefijo del volumen es **determinista**: el instalador fija
+`COMPOSE_PROJECT_NAME=<dominio con puntos→guion_bajo>` en el `.env` (ej.
+`fe_dominio_org`), de modo que el nombre del volumen NO depende de en que
+carpeta viva el repo. Asi `uninstall.sh` puede eliminarlos de forma fiable.
+Verificar con `docker volume ls`.
+
+> Instalaciones antiguas (anteriores a este cambio) pueden tener el prefijo
+> basado en el nombre de carpeta sin puntos (ej. `fedominioorg_mysqldata1`);
+> `uninstall.sh` reconoce ambos formatos.
 
 ---
 
@@ -213,6 +221,7 @@ del proyecto **normalizado** (elimina los puntos: `fe.consurtrading.org` →
 | `install.sh` | Primera instalacion de un dominio (Fase 1). Reutilizable para agregar mas dominios. |
 | `update.sh` | Actualizar codigo de un dominio ya instalado (menu selector + rama). |
 | `ssl.sh` | SSL wildcard: **emite** (primera vez, activa HTTPS) o **renueva** (~90 dias) segun detecte. Menu selector de dominio. |
+| `uninstall.sh` | Eliminar por completo un dominio: contenedores + **volumenes** + carpeta. Unica forma correcta de borrar un dominio (evita el `Access denied` al reinstalar). |
 | `set-hosts.sh` | Configurar `/etc/hosts` en PC Linux/Mac. |
 | `set-hosts.ps1` | Configurar `hosts` en PC Windows (PowerShell admin). |
 
@@ -237,6 +246,7 @@ mkdir -p /opt/proyectos && cd /opt/proyectos
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/install.sh
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/update.sh
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/ssl.sh
+curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/uninstall.sh
 curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/set-hosts.sh
 
 chmod +x *.sh
@@ -252,7 +262,7 @@ sudo ./install.sh
 
 | Pregunta | Default | Descripcion |
 |----------|---------|-------------|
-| Dominio base | *(obligatorio)* | Ej. `fe.consurtrading.org`. Se convierte en `APP_URL_BASE`. |
+| Dominio base | *(obligatorio)* | Ej. `fe.dominio.org`. Se convierte en `APP_URL_BASE`. |
 | IP LAN del servidor | autodetectada | IP de la VM en la red local (ej. `192.168.1.100`). |
 | Numero de servicio | `# instalados + 1` | Identificador interno (afecta nombre de servicios en compose). |
 | Puerto MySQL host | auto libre 3001–3999 | Puerto expuesto al host para acceso remoto a MariaDB. |
@@ -262,22 +272,27 @@ Al inicio el script **lista los dominios ya instalados** en la carpeta actual.
 
 ### 7.4 Que hace install.sh (paso a paso)
 
-1. Valida dominio (no puede empezar con `ws.`).
-2. Instala Docker Engine + plugin compose (si no existe).
-3. Instala `certbot` (opcional, para Fase 2).
-4. Crea red Docker `proxynet` (compartida).
-5. Levanta `nginx-proxy` en puertos **80 y 443** (solo la primera vez).
-6. Clona `pro-8` en `./<dominio>/` (rama elegida).
-7. Ejecuta `scripts/onprem-setup.sh` dentro del proyecto:
-   - Genera `docker-compose.yml`, `.env`, `supervisor.conf`, Dockerfiles.
+1. **Preflight (primero)**: comprueba Docker instalado + daemon activo, plugin
+   `docker compose`, `git` y `curl` (instala lo que falte). Asi falla temprano
+   y con un mensaje claro si algo no esta listo.
+2. Lista los dominios ya instalados y valida el dominio (no puede empezar con `ws.`).
+3. **Guarda anti-huerfanos**: si detecta restos Docker (contenedores/volumenes)
+   de una instalacion previa del mismo dominio cuya carpeta ya no existe, avisa
+   y ofrece purgarlos (evita el error `Access denied` al reinstalar).
+4. Crea la red `proxynet` y levanta `nginx-proxy` (80/443) en `_infra/proxy/`
+   (solo la primera vez; compartido por todos los dominios).
+5. Clona `pro-8` en `<dominio>/app/` (rama elegida).
+6. Ejecuta `scripts/onprem-setup.sh` dentro del proyecto:
+   - Genera `docker-compose.yml`, `.env` (con `COMPOSE_PROJECT_NAME`),
+     `supervisor.conf`, Dockerfiles.
    - Levanta 7 contenedores (nginx, fpm, mariadb, redis, soketi, scheduling, supervisor).
    - `composer install`, `migrate:refresh --seed`, `config:cache`.
    - Crea usuario admin y plan "Ilimitado".
-8. Imprime `docker compose ps`, credenciales y lineas para `hosts`.
+7. Imprime `docker compose ps`, credenciales y lineas para `hosts`.
 
 ### 7.5 Credenciales generadas
 
-Archivo: `/opt/proyectos/<dominio>-onprem.txt`
+Archivo: `/opt/proyectos/<dominio>/<dominio>-onprem.txt`
 
 Contiene:
 
@@ -291,25 +306,25 @@ Contiene:
 
 | Recurso | URL (Fase 1) |
 |---------|--------------|
-| Panel central | `http://192.168.1.100` o `http://fe.consurtrading.org` *(con hosts)* |
+| Panel central | `http://192.168.1.100` o `http://fe.dominio.org` *(con hosts)* |
 | Crear tenants | Panel → Clientes → Nuevo (subdominio ej. `empresa1`) |
-| Tenant empresa1 | `http://empresa1.fe.consurtrading.org` *(con hosts)* |
+| Tenant empresa1 | `http://empresa1.fe.dominio.org` *(con hosts)* |
 
 ---
 
 ## 8. Multi-dominio en el mismo servidor
 
 Cada dominio base es un **proyecto independiente con su propio gestor de
-tenants**. Ejemplo objetivo en el servidor de Consurtrading:
+tenants**. Ejemplo objetivo en el servidor de dominio:
 
 ```text
-fe.consurtrading.org                 ← BASE proyecto 1 (gestor de tenants)
-  empresa1.fe.consurtrading.org      ←   tenant
-  empresa2.fe.consurtrading.org      ←   tenant
+fe.dominio.org                 ← BASE proyecto 1 (gestor de tenants)
+  empresa1.fe.dominio.org      ←   tenant
+  empresa2.fe.dominio.org      ←   tenant
 
-ntsuite.consurtrading.org            ← BASE proyecto 2 (gestor de tenants)
-  empresa1.ntsuite.consurtrading.org ←   tenant
-  empresa2.ntsuite.consurtrading.org ←   tenant
+ntsuite.dominio.org            ← BASE proyecto 2 (gestor de tenants)
+  empresa1.ntsuite.dominio.org ←   tenant
+  empresa2.ntsuite.dominio.org ←   tenant
 ```
 
 Para instalar el **segundo dominio** basta re-ejecutar el instalador:
@@ -317,7 +332,7 @@ Para instalar el **segundo dominio** basta re-ejecutar el instalador:
 ```bash
 cd /opt/proyectos
 sudo ./install.sh
-# Dominio: ntsuite.consurtrading.org
+# Dominio: ntsuite.dominio.org
 # El script asigna automaticamente otro puerto MySQL libre (3002, ...)
 ```
 
@@ -329,10 +344,10 @@ VIP/NAT 80/443 es **uno solo** para todos.
 
 | Recurso | Aislamiento |
 |---------|-------------|
-| Codigo + `.env` | Carpeta propia `./<dominio>/` |
+| Codigo + `.env` | Carpeta propia `./<dominio>/app/` |
 | Contenedores | Nombre `nginx_<dom>`, `fpm_<dom>`, etc. |
-| Base de datos | Volumen `mysqldata` propio |
-| Redis | Volumen `redisdata` propio |
+| Base de datos | Volumen propio `<dom>_mysqldata<N>` |
+| Redis | Volumen propio `<dom>_redisdata<N>` |
 | Puerto MySQL host | Distinto por dominio (3001, 3002, ...) |
 | Proxy HTTP/HTTPS | **Compartido** — enruta por `VIRTUAL_HOST` |
 | IP publica | **Compartida** — FortiGate NAT 80/443 al mismo servidor |
@@ -345,12 +360,12 @@ Internet / LAN ───► │  nginx-proxy (:80 / :443)       │
                                │
               ┌────────────────┼─────────────────────┐
               ▼                ▼                     ▼
-    fe.consurtrading.org   ntsuite.consurtrading.org   cualquier-dominio.com
+    fe.dominio.org   ntsuite.dominio.org   cualquier-dominio.com
     (stack Docker propio)  (stack propio)              (stack propio)
 ```
 
 > El instalador es **generico**: el dominio base puede ser **cualquiera**
-> (de cualquier cliente); no esta atado a `consurtrading.org`. Cada
+> (de cualquier cliente); no esta atado a `dominio.org`. Cada
 > `install.sh` agrega un stack mas detras del mismo proxy.
 
 ---
@@ -362,7 +377,7 @@ Ver guia completa: [`configurar-pcs-host.md`](configurar-pcs-host.md).
 Resumen rapido — en el **servidor**, obtener lineas exactas:
 
 ```bash
-cd /opt/proyectos/fe.consurtrading.org
+cd /opt/proyectos/fe.dominio.org/app
 bash scripts/list-tenant-hosts.sh
 ```
 
@@ -370,12 +385,12 @@ En cada **PC interna**:
 
 ```bash
 # Linux / Mac
-sudo ./set-hosts.sh 192.168.1.100 fe.consurtrading.org empresa1 empresa2
+sudo ./set-hosts.sh 192.168.1.100 fe.dominio.org empresa1 empresa2
 ```
 
 ```powershell
 # Windows (PowerShell como Administrador)
-.\set-hosts.ps1 -ServerIp 192.168.1.100 -BaseDomain fe.consurtrading.org -Empresas empresa1,empresa2
+.\set-hosts.ps1 -ServerIp 192.168.1.100 -BaseDomain fe.dominio.org -Empresas empresa1,empresa2
 ```
 
 > Cada empresa nueva requiere agregar su linea en el `hosts` de las PCs que la
@@ -395,7 +410,7 @@ Un solo script para todo el ciclo SSL. **Detecta automaticamente** el modo:
 cd /opt/proyectos
 sudo ./ssl.sh
 # Elige el dominio del menu, o directo:
-sudo ./ssl.sh --domain fe.consurtrading.org --email admin@consurtrading.org
+sudo ./ssl.sh --domain fe.dominio.org --email admin@dominio.org
 ```
 
 ### 10.1 NO requiere IP publica ni FortiGate
@@ -403,7 +418,7 @@ sudo ./ssl.sh --domain fe.consurtrading.org --email admin@consurtrading.org
 El reto **DNS-01** valida creando un TXT en el DNS **publico** del registrador;
 no comprueba que el servidor sea alcanzable desde internet. Por eso el SSL se
 puede emitir **desde la Fase 1** (solo LAN): las PCs acceden por el nombre real
-(`https://empresa1.fe.consurtrading.org` via hosts/DNS FortiGate) y el
+(`https://empresa1.fe.dominio.org` via hosts/DNS FortiGate) y el
 certificado es valido. Cuando llegue la IP publica, el mismo cert sirve para
 el acceso externo sin tocar nada.
 
@@ -411,25 +426,25 @@ el acceso externo sin tocar nada.
 
 ### 10.2 Proceso certbot (DNS-01 manual)
 
-1. Certbot muestra uno o dos registros TXT `_acme-challenge.fe.consurtrading.org`.
+1. Certbot muestra uno o dos registros TXT `_acme-challenge.fe.dominio.org`.
 2. Crearlos en el panel DNS del registrador.
-3. Esperar propagacion (5–30 min; verificar con `dig TXT _acme-challenge.fe.consurtrading.org @8.8.8.8`).
+3. Esperar propagacion (5–30 min; verificar con `dig TXT _acme-challenge.fe.dominio.org @8.8.8.8`).
 4. Presionar Enter en certbot (**no usar Ctrl+C**).
 5. El script copia certs a `certs/`, cambia `.env` a HTTPS (solo primera vez) y
    reinicia el proxy.
 
-Un solo certificado `*.fe.consurtrading.org` cubre **todas** las empresas de
-ese dominio base. Cada dominio base instalado (ej. `ntsuite.consurtrading.org`)
+Un solo certificado `*.fe.dominio.org` cubre **todas** las empresas de
+ese dominio base. Cada dominio base instalado (ej. `ntsuite.dominio.org`)
 lleva su **propio** wildcard: ejecutar `ssl.sh` una vez por dominio.
 
 ### 10.3 Renovacion (~90 dias, manual)
 
 Como el DNS del registrador no tiene API, la renovacion es **manual**: mismo
-comando (`sudo ./ssl.sh --domain fe.consurtrading.org`), certbot pide recrear
+comando (`sudo ./ssl.sh --domain fe.dominio.org`), certbot pide recrear
 el TXT. El script imprime la **fecha sugerida** de proxima renovacion (~75
 dias); agendarla en calendario.
 
-> Automatizacion futura (opcional): delegar `_acme-challenge.fe.consurtrading.org`
+> Automatizacion futura (opcional): delegar `_acme-challenge.fe.dominio.org`
 > por CNAME a una zona DNS con API (acme-dns, o una zona auxiliar gratuita en
 > Cloudflare) y usar un hook de certbot. Asi la renovacion deja de ser manual
 > sin cambiar de registrador.
@@ -438,7 +453,7 @@ dias); agendarla en calendario.
 
 | Alternativa | Por que NO |
 |-------------|-----------|
-| **Cloudflare** | El plan gratuito emite wildcard de un nivel (`*.consurtrading.org`); para `*.fe.consurtrading.org` exige plan de pago (ACM). |
+| **Cloudflare** | El plan gratuito emite wildcard de un nivel (`*.dominio.org`); para `*.fe.dominio.org` exige plan de pago (ACM). |
 | **FortiGate como CA** (cert interno) | Habria que instalar el CA cert en CADA PC/celular; warnings en dispositivos sin el; no sirve para el acceso publico. |
 | **FortiGate SSL offloading en el VIP** | Centraliza los certs en un equipo cuyo admin no siempre esta disponible; el cert igual habria que emitirlo/renovarlo. |
 | **HTTP-01 (certbot standalone/webroot)** | No emite wildcard; cada tenant nuevo necesitaria re-emitir. |
@@ -450,13 +465,13 @@ dias); agendarla en calendario.
 La app **ya funciona en LAN** sin nada de esto (hosts → IP del servidor).
 Cuando el administrador del FortiGate este disponible, solo debe "conectar".
 Este checklist tambien queda **generado por dominio** al final del archivo de
-credenciales `/opt/proyectos/<dominio>-onprem.txt`.
+credenciales `/opt/proyectos/<dominio>/<dominio>-onprem.txt`.
 
 ### 11.1 DNS publico (panel del registrador) — POR dominio base
 
 ```text
-A   fe.consurtrading.org       → IP_PUBLICA
-A   *.fe.consurtrading.org     → IP_PUBLICA   (wildcard: cubre todos los tenants)
+A   fe.dominio.org       → IP_PUBLICA
+A   *.fe.dominio.org     → IP_PUBLICA   (wildcard: cubre todos los tenants)
 ```
 
 ### 11.2 FortiGate — VIP / Port Forward (UNA sola vez, compartido)
@@ -476,7 +491,7 @@ Objetivo: que las PCs internas resuelvan **local** (mas rapido y funciona
 **sin internet**), reemplazando los archivos `hosts` por PC:
 
 ```text
-config system dns-database → zona "fe.consurtrading.org" (primary/shadow):
+config system dns-database → zona "fe.dominio.org" (primary/shadow):
   @    A   IP_LAN_SERVIDOR
   *    A   IP_LAN_SERVIDOR    ← si la version de FortiOS no soporta wildcard,
                                 crear una entrada por tenant (la lista exacta:
@@ -490,10 +505,10 @@ Y el **DHCP** de la LAN debe entregar el FortiGate como servidor DNS.
 
 | Origen | URL |
 |--------|-----|
-| Externo (internet) | `https://empresa1.fe.consurtrading.org` (DNS publico → VIP → LAN) |
-| Interno (LAN) | `https://empresa1.fe.consurtrading.org` (DNS FortiGate → LAN directo) |
+| Externo (internet) | `https://empresa1.fe.dominio.org` (DNS publico → VIP → LAN) |
+| Interno (LAN) | `https://empresa1.fe.dominio.org` (DNS FortiGate → LAN directo) |
 
-- Si el SSL no se emitio antes: `sudo ./ssl.sh --domain fe.consurtrading.org`.
+- Si el SSL no se emitio antes: `sudo ./ssl.sh --domain fe.dominio.org`.
 - Retirar las entradas pro-8 del `hosts` de las PCs (ya no se necesitan).
 - Acceder por **dominio**, no por IP (con `FORCE_HTTPS=true` la IP genera
   warning de certificado).
@@ -516,8 +531,8 @@ Flujo interactivo:
 Opciones directas:
 
 ```bash
-sudo ./update.sh --domain fe.consurtrading.org --branch master
-sudo ./update.sh --domain fe.consurtrading.org --skip-backup   # no recomendado en prod
+sudo ./update.sh --domain fe.dominio.org --branch master
+sudo ./update.sh --domain fe.dominio.org --skip-backup   # no recomendado en prod
 ```
 
 ### Que hace el update (en orden)
@@ -540,32 +555,32 @@ sudo ./update.sh --domain fe.consurtrading.org --skip-backup   # no recomendado 
 
 ## 13. Variables .env generadas
 
-Ejemplo para `fe.consurtrading.org` en **Fase 1 (HTTP)**:
+Ejemplo para `fe.dominio.org` en **Fase 1 (HTTP)**:
 
 ```env
-APP_NAME=fe.consurtrading.org
+APP_NAME=fe.dominio.org
 APP_ENV=production
 APP_DEBUG=false
-APP_URL_BASE=fe.consurtrading.org
+APP_URL_BASE=fe.dominio.org
 APP_URL=http://${APP_URL_BASE}
 FORCE_HTTPS=false
 
 DB_CONNECTION=system
-DB_HOST=mariadb_fe_consurtrading_org
-DB_DATABASE=fe_consurtrading_org
+DB_HOST=mariadb_fe_dominio_org
+DB_DATABASE=fe_dominio_org
 DB_USERNAME=root
 DB_PASSWORD=<generado>
 
 CACHE_DRIVER=file          # CRITICO: redis_tenancy rompe CLI si CACHE_DRIVER=redis
 QUEUE_CONNECTION=redis
 SESSION_DRIVER=redis
-REDIS_HOST=redis_fe_consurtrading_org
+REDIS_HOST=redis_fe_dominio_org
 
 BROADCAST_DRIVER=pusher
-PUSHER_HOST=soketi_fe_consurtrading_org
+PUSHER_HOST=soketi_fe_dominio_org
 PUSHER_PORT=6001
 PUSHER_SCHEME=http
-PUSHER_CLIENT_HOST=ws.fe.consurtrading.org
+PUSHER_CLIENT_HOST=ws.fe.dominio.org
 PUSHER_CLIENT_PORT=80          # mientras no haya SSL: HTTP
 PUSHER_CLIENT_SCHEME=http      # ssl.sh cambia a 443/https al emitir el cert
 
@@ -588,14 +603,14 @@ PUSHER_CLIENT_SCHEME=https
 
 ```bash
 # Estado de contenedores de un dominio
-cd /opt/proyectos/fe.consurtrading.org
+cd /opt/proyectos/fe.dominio.org/app
 docker compose ps
 
 # Logs en tiempo real
 docker compose logs -f fpm_1
 
 # Entrar al contenedor PHP
-docker exec -it fpm_fe_consurtrading_org bash
+docker exec -it fpm_fe_dominio_org bash
 
 # Artisan (siempre con CACHE_DRIVER=file en CLI)
 docker compose exec fpm_1 sh -c "CACHE_DRIVER=file php artisan migrate:status"
@@ -607,18 +622,93 @@ bash scripts/list-tenant-hosts.sh
 docker compose restart
 
 # Ver volumenes (NO borrar en prod)
-docker volume ls | grep fe_consurtrading
+docker volume ls | grep fe_dominio
 ```
 
 ---
 
 ## 15. Troubleshooting
 
-### La PC no abre `empresa1.fe.consurtrading.org`
+### `Access denied for user 'root'` al REINSTALAR un dominio
+
+Sintoma (durante `migrate:refresh --seed`):
+
+```text
+SQLSTATE[HY000] [1045] Access denied for user 'root'@'172.x.x.x' (using password: YES)
+```
+
+**Causa:** se borro la carpeta del proyecto y/o los contenedores **a mano**, pero
+NO los volumenes. `docker rm` + `rm -rf` **no** elimina los volumenes Docker.
+MariaDB solo fija la password de `root` en la PRIMERA inicializacion (data-dir
+vacio); al reinstalar se genera un `.env` con password NUEVA, pero el volumen
+conserva la VIEJA → rechazo de conexion.
+
+**Solucion (limpiar el volumen huerfano y reinstalar):**
+
+```bash
+cd /opt/proyectos
+# Opcion A (recomendada): herramienta dedicada (detecta restos aunque la carpeta no exista)
+sudo ./uninstall.sh --domain ceos-facturacion.com
+# Opcion B (manual): identificar y borrar los volumenes del dominio
+docker volume ls | grep -Ei 'ceos.*(mysqldata|redisdata)'
+docker volume rm <los_que_aparezcan>
+
+sudo ./install.sh           # reinstalacion limpia (sin Access denied)
+```
+
+> El nuevo `install.sh` **detecta automaticamente** estos restos antes de
+> reinstalar y ofrece purgarlos. Para no llegar a este estado, elimina siempre
+> los dominios con `uninstall.sh`, nunca con `rm -rf`.
+
+### Cambie la IP / la red del servidor
+
+**No borres nada.** Re-ejecuta el instalador con el **mismo dominio** y la IP
+nueva: detecta el `.env` existente, **reutiliza los secretos**, regenera
+`docker-compose.yml`/config (nuevo `VIRTUAL_HOST` con la IP nueva) y **no toca la
+base de datos**.
+
+```bash
+cd /opt/proyectos
+sudo ./install.sh
+# Dominio: <el mismo de antes>   |   IP LAN: <la nueva>
+# Responde "s" a "ya parece instalado, re-generar config?"
+```
+
+Luego actualiza la IP en el `hosts`/DNS de las PCs (`set-hosts.sh`) o en el
+FortiGate. (Borrar y reinstalar es justo lo que provoca el `Access denied` de
+arriba.)
+
+### Eliminar un dominio por completo
+
+```bash
+cd /opt/proyectos
+sudo ./uninstall.sh --domain fe.dominio.org              # con confirmacion
+sudo ./uninstall.sh --domain fe.dominio.org --with-backup # vuelca la BD antes
+```
+
+Borra contenedores + volumenes + carpeta de ESE dominio. No toca el proxy
+compartido, los certificados ni los demas dominios.
+
+### La carpeta quedo anidada (`<dominio>/<dominio>`)
+
+Ocurria al ejecutar `install.sh` **desde dentro** de una carpeta. Ya no pasa: el
+script se ancla a su propia ubicacion. Borra la carpeta mal creada con
+`uninstall.sh` (o `rm -rf` si no llego a levantar contenedores) y reinstala.
+
+### Puerto 80/443 ocupado (el proxy no levanta)
+
+```bash
+ss -tuln | grep -E ':80 |:443 '     # ver quien los usa
+docker ps -a                         # ¿hay otro proxy/servicio?
+```
+
+El `nginx-proxy` es **uno solo y compartido**; no instales un segundo.
+
+### La PC no abre `empresa1.fe.dominio.org`
 
 1. Verificar linea en `hosts` apuntando a la IP LAN correcta.
 2. Windows: `ipconfig /flushdns`.
-3. Probar desde el servidor: `curl -H "Host: empresa1.fe.consurtrading.org" http://127.0.0.1/login`.
+3. Probar desde el servidor: `curl -H "Host: empresa1.fe.dominio.org" http://127.0.0.1/login`.
 
 ### Panel central abre pero el tenant da 404
 
@@ -629,14 +719,14 @@ docker volume ls | grep fe_consurtrading
 ### Error SQL / Access denied en tenant
 
 ```bash
-docker exec fpm_fe_consurtrading_org sh -c "CACHE_DRIVER=file php artisan tenancy:key:update"
-docker exec fpm_fe_consurtrading_org sh -c "CACHE_DRIVER=file php artisan config:cache"
+docker exec fpm_fe_dominio_org sh -c "CACHE_DRIVER=file php artisan tenancy:key:update"
+docker exec fpm_fe_dominio_org sh -c "CACHE_DRIVER=file php artisan config:cache"
 ```
 
 ### Certbot falla en DNS-01
 
 - Verificar que el TXT `_acme-challenge` esta creado y propagado antes de Enter.
-- Comprobar con: `dig TXT _acme-challenge.fe.consurtrading.org @8.8.8.8`.
+- Comprobar con: `dig TXT _acme-challenge.fe.dominio.org @8.8.8.8`.
 
 ### Puerto MySQL ocupado al instalar segundo dominio
 
@@ -645,8 +735,8 @@ docker exec fpm_fe_consurtrading_org sh -c "CACHE_DRIVER=file php artisan config
 
 ### WebSocket / VendeMaster no conecta
 
-- Fase 1: incluir `ws.fe.consurtrading.org` en el `hosts` de la PC.
-- Fase 2: verificar certificado de `ws.fe.consurtrading.org` en `certs/`.
+- Fase 1: incluir `ws.fe.dominio.org` en el `hosts` de la PC.
+- Fase 2: verificar certificado de `ws.fe.dominio.org` en `_infra/certs/`.
 
 ---
 
@@ -657,10 +747,10 @@ docker exec fpm_fe_consurtrading_org sh -c "CACHE_DRIVER=file php artisan config
 | Volumen `mysqldata*` | Perdida total de BD (system + todos los tenants) |
 | Volumen `redisdata*` | Perdida de colas/sesiones en Redis |
 | `.env` | Credenciales y configuracion irreversible sin backup |
-| `certs/*.crt` / `*.key` | HTTPS deja de funcionar hasta re-emitir |
+| `_infra/certs/*.crt` / `*.key` | HTTPS deja de funcionar hasta re-emitir |
 | `storage/app/backups/` | Unicos respaldos pre-update |
 
-**Comandos prohibidos en produccion:**
+**Comandos prohibidos en produccion (salvo que quieras ELIMINAR el dominio):**
 
 ```bash
 docker compose down -v          # borra volumenes
@@ -669,3 +759,8 @@ docker system prune --volumes     # borra todo lo no usado incluyendo datos
 ```
 
 Para detener contenedores sin perder datos: `docker compose down` (sin `-v`).
+
+> ¿Quieres **eliminar** un dominio a proposito? No lo hagas a mano (deja
+> volumenes huerfanos y luego el `Access denied` al reinstalar). Usa:
+> `sudo ./uninstall.sh --domain <dominio>` — borra contenedores, volumenes y
+> carpeta de forma ordenada y deja intacto el resto.

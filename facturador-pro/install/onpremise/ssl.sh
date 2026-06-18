@@ -24,7 +24,8 @@
 
 set -e
 
-ROOT="$(pwd)"
+# La raiz es DONDE VIVE EL SCRIPT (no el directorio actual). Override: --root
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 DOMAIN=""
 EMAIL=""
 
@@ -37,11 +38,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Si se ejecuta dentro de un proyecto, subir a la raiz para listar
+# Si se ejecuta dentro de un proyecto (<dominio>/app), subir a la raiz.
 if [ -f "$ROOT/docker-compose.yml" ] && [ -f "$ROOT/artisan" ]; then
-    ROOT="$(dirname "$ROOT")"
+    ROOT="$(cd "$ROOT/../.." && pwd)"
 fi
-CERTS_DIR="$ROOT/certs"
+CERTS_DIR="$ROOT/_infra/certs"
 mkdir -p "$CERTS_DIR"
 
 env_value() { grep -E "^$1=" "$2" 2>/dev/null | tail -1 | cut -d= -f2- | sed 's/^"//;s/"$//' || true; }
@@ -55,8 +56,8 @@ set_env_var() {
 if [ -z "$DOMAIN" ]; then
     PROJECTS=()
     for d in "$ROOT"/*/; do
-        dom="$(basename "$d")"; [ "$dom" = "proxy" ] && continue
-        [ -f "${d}docker-compose.yml" ] && [ -f "${d}.env" ] && PROJECTS+=("$dom")
+        dom="$(basename "$d")"; case "$dom" in _*) continue ;; esac
+        [ -f "${d}app/docker-compose.yml" ] && [ -f "${d}app/.env" ] && PROJECTS+=("$dom")
     done
     [ ${#PROJECTS[@]} -eq 0 ] && { echo "ERROR: no hay dominios instalados en $ROOT (usa --root o --domain)."; exit 1; }
     echo "Dominios instalados en $ROOT:"
@@ -66,7 +67,7 @@ if [ -z "$DOMAIN" ]; then
     DOMAIN="${PROJECTS[$((sel-1))]}"
 fi
 
-PROJECT_DIR="$ROOT/$DOMAIN"
+PROJECT_DIR="$ROOT/$DOMAIN/app"
 ENV_FILE="$PROJECT_DIR/.env"
 SOKETI_HOST="ws.$DOMAIN"
 LIVE_PEM="/etc/letsencrypt/live/$DOMAIN/fullchain.pem"

@@ -196,7 +196,7 @@ zona DNS local en el FortiGate; el VIP/NAT 80/443 es uno solo.
 
 | Recurso | `fe.consurtrading.org` | `otro-dominio.com` |
 |---------|------------------------|---------------------|
-| Carpeta | `/opt/proyectos/fe.consurtrading.org` | `/opt/proyectos/otro-dominio.com` |
+| Carpeta | `/opt/proyectos/fe.consurtrading.org/app` | `/opt/proyectos/otro-dominio.com/app` |
 | Contenedores | `fpm_fe_consurtrading_org` | `fpm_otro_dominio_com` |
 | Volumen MySQL | `fe_consurtrading_org_mysqldata1` | `otro_dominio_com_mysqldata2` |
 | Puerto MySQL host | `3001` | `3002` (auto) |
@@ -207,8 +207,8 @@ zona DNS local en el FortiGate; el VIP/NAT 80/443 es uno solo.
 
 | Recurso | Ubicacion |
 |---------|-----------|
-| nginx-proxy | `/opt/proyectos/proxy/` |
-| Certificados SSL | `/opt/proyectos/certs/` |
+| nginx-proxy | `/opt/proyectos/_infra/proxy/` |
+| Certificados SSL | `/opt/proyectos/_infra/certs/` |
 | Red Docker | `proxynet` |
 
 ### Misma IP publica, varios dominios
@@ -456,7 +456,7 @@ sudo ./set-hosts.sh <IP> <dominio> [empresa1 empresa2 ...]
 http://<IP>/login  →  Clientes → Nuevo
 
 # Al crear empresa nueva, actualizar hosts en PCs:
-cd /opt/proyectos/<dominio>
+cd /opt/proyectos/<dominio>/app
 bash scripts/list-tenant-hosts.sh
 ```
 
@@ -471,7 +471,7 @@ sudo ./ssl.sh --domain fe.consurtrading.org
 
 ### Fase 2 — Publico (checklist del admin de red FortiGate)
 
-El detalle por dominio queda generado en `/opt/proyectos/<dominio>-onprem.txt`
+El detalle por dominio queda generado en `/opt/proyectos/<dominio>/<dominio>-onprem.txt`
 (seccion "PENDIENTES ADMIN DE RED"). Resumen:
 
 ```text
@@ -502,7 +502,7 @@ sudo ./update.sh
 sudo ./ssl.sh --domain fe.consurtrading.org
 
 # Listar lineas hosts actualizadas
-bash /opt/proyectos/fe.consurtrading.org/scripts/list-tenant-hosts.sh
+bash /opt/proyectos/fe.consurtrading.org/app/scripts/list-tenant-hosts.sh
 ```
 
 ---
@@ -514,10 +514,10 @@ bash /opt/proyectos/fe.consurtrading.org/scripts/list-tenant-hosts.sh
 | Que | Donde |
 |-----|-------|
 | Raiz instalacion | `/opt/proyectos/` |
-| Proyecto Consurtrading | `/opt/proyectos/fe.consurtrading.org/` |
-| Credenciales | `/opt/proyectos/fe.consurtrading.org-onprem.txt` |
-| Proxy compartido | `/opt/proyectos/proxy/` |
-| Certificados SSL | `/opt/proyectos/certs/` |
+| Proyecto Consurtrading | `/opt/proyectos/fe.consurtrading.org/app/` |
+| Credenciales | `/opt/proyectos/fe.consurtrading.org/fe.consurtrading.org-onprem.txt` |
+| Proxy compartido | `/opt/proyectos/_infra/proxy/` |
+| Certificados SSL | `/opt/proyectos/_infra/certs/` |
 | Backups pre-update | `storage/app/backups/pre-update/FECHA/` |
 
 ### Archivos criticos por proyecto
@@ -545,6 +545,11 @@ docker volume rm <mysqldata>
 docker system prune --volumes
 ```
 
+> Para **eliminar** un dominio a proposito usa `sudo ./uninstall.sh --domain
+> <dominio>` (borra contenedores + volumenes + carpeta de forma ordenada).
+> Borrarlo a mano deja volumenes huerfanos y luego el `Access denied` al
+> reinstalar el mismo dominio.
+
 ---
 
 ## Historial de contexto
@@ -556,3 +561,4 @@ docker system prune --volumes
 | 2026-06 | Sin Cloudflare; DNS registrador sin API; SSL manual DNS-01 |
 | 2026-06 | Scripts on-premise multi-dominio en `codeplant/.../onpremise/` |
 | 2026-06-12 | Revision: SSL fusionado en `ssl.sh` (emite/renueva); SSL emisible desde Fase 1 (DNS-01 sin IP publica); re-ejecucion de install reusa secretos (sin `migrate:refresh` sobre BD existente); se respeta `composer.lock`; checklist "PENDIENTES ADMIN DE RED" generado por dominio en `<dominio>-onprem.txt` (DNS registrador, VIP/NAT, zona DNS FortiGate); segundo dominio planificado `ntsuite.consurtrading.org` |
+| 2026-06-18 | Reorganizacion del instalador: layout `_infra/{proxy,certs}` + `<dominio>/app` (repo) + credenciales dentro de la carpeta del dominio; `install.sh` ancla la raiz a su ubicacion (fin del anidamiento `<dominio>/<dominio>`) y hace preflight de Docker primero; `COMPOSE_PROJECT_NAME` fija nombres de volumen deterministas; nuevo `uninstall.sh` y guarda anti-huerfanos que resuelven el `Access denied for user 'root'` al reinstalar un dominio borrado a mano |
