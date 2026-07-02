@@ -55,6 +55,38 @@ set_env_var() {
     else echo "${key}=${value}" >> "$file"; fi
 }
 
+find_proxy() {
+    local proxy
+
+    proxy="$(docker ps --filter "ancestor=rash07/nginx-proxy:4.0" --format '{{.Names}}' | head -1)"
+    [ -z "$proxy" ] && proxy="$(docker ps | grep -i proxy | awk '{print $NF}' | head -1)"
+    echo "$proxy"
+}
+
+proxy_certs_dir() {
+    local proxy="$1"
+    local source
+
+    [ -n "$proxy" ] || { echo "$CERTS_DIR"; return 0; }
+
+    source="$(docker inspect "$proxy" --format '{{range .Mounts}}{{if eq .Destination "/etc/nginx/certs"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)"
+    if [ -n "$source" ]; then
+        echo "$source"
+    else
+        echo "$CERTS_DIR"
+    fi
+}
+
+copy_cert_files() {
+    local target_dir="$1"
+
+    mkdir -p "$target_dir"
+    cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$target_dir/$DOMAIN.crt"
+    cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem"   "$target_dir/$DOMAIN.key"
+    cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$target_dir/$SOKETI_HOST.crt"
+    cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem"   "$target_dir/$SOKETI_HOST.key"
+}
+
 ensure_proxy_env() {
     local compose_file="$PROJECT_DIR/docker-compose.yml"
     local result
@@ -188,6 +220,14 @@ validate_local_proxy() {
         docker exec "$PROXY" nginx -t >/dev/null 2>&1 && \
             echo "   OK nginx -t dentro de $PROXY" || \
             echo "   ADVERTENCIA: nginx -t fallo dentro de $PROXY (revisa docker logs $PROXY)."
+
+        docker exec "$PROXY" sh -c "test -s /etc/nginx/certs/$DOMAIN.crt && test -s /etc/nginx/certs/$DOMAIN.key" >/dev/null 2>&1 && \
+            echo "   OK certificado visible dentro del proxy: /etc/nginx/certs/$DOMAIN.{crt,key}" || \
+            echo "   ADVERTENCIA: el proxy no ve /etc/nginx/certs/$DOMAIN.{crt,key}; revisa el volumen de certificados."
+
+        docker exec "$PROXY" sh -c "nginx -T 2>/dev/null | grep -q 'server_name .*${DOMAIN}'" >/dev/null 2>&1 && \
+            echo "   OK nginx genero server_name para $DOMAIN" || \
+            echo "   ADVERTENCIA: nginx no genero server_name para $DOMAIN; revisa VIRTUAL_HOST en el contenedor nginx del proyecto."
     fi
 
     if ! command -v curl >/dev/null 2>&1; then
@@ -320,11 +360,16 @@ if [ "$MODE" = "renovar" ]; then
     fi
 fi
 
+PROXY="$(find_proxy)"
+PROXY_CERTS_DIR="$(proxy_certs_dir "$PROXY")"
+
 echo "-> Copiando certificados a $CERTS_DIR ..."
-cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$CERTS_DIR/$DOMAIN.crt"
-cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem"   "$CERTS_DIR/$DOMAIN.key"
-cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$CERTS_DIR/$SOKETI_HOST.crt"
-cp "/etc/letsencrypt/live/$DOMAIN/privkey.pem"   "$CERTS_DIR/$SOKETI_HOST.key"
+copy_cert_files "$CERTS_DIR"
+
+if [ "$PROXY_CERTS_DIR" != "$CERTS_DIR" ]; then
+    echo "-> Copiando certificados al volumen real del proxy: $PROXY_CERTS_DIR ..."
+    copy_cert_files "$PROXY_CERTS_DIR"
+fi
 
 COMPOSE_PROXY_CHANGED="0"
 ensure_proxy_env && COMPOSE_PROXY_CHANGED="1"
@@ -354,10 +399,10 @@ echo "-> Reiniciando PHP y workers (fpm_$N, scheduling_$N, supervisor_$N) ..."
 [ "$COMPOSE_PROXY_CHANGED" = "1" ] && restart_project_nginx
 
 echo "-> Reiniciando proxy ..."
-PROXY="$(docker ps --filter "ancestor=rash07/nginx-proxy:4.0" --format '{{.Names}}' | head -1)"
-[ -z "$PROXY" ] && PROXY="$(docker ps | grep -i proxy | awk '{print $NF}' | head -1)"
+[ -z "$PROXY" ] && PROXY="$(find_proxy)"
 if [ -n "$PROXY" ]; then
     docker restart "$PROXY" && echo "   OK proxy reiniciado: $PROXY" || echo "   ADVERTENCIA: reinicia el proxy manualmente."
+    sleep 3
 else
     echo "   ADVERTENCIA: reinicia el proxy manualmente."
 fi
