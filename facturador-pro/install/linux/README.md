@@ -50,6 +50,140 @@ Para renovar certificado y reparar proxy en el mismo flujo:
 sudo ./updateSSL.sh nt-suite.pro
 ```
 
+## Troubleshooting SSL / Cloudflare / Laravel
+
+### Cloudflare muestra 522 pero el origen directo responde
+
+Sintoma:
+
+```text
+https://ceos-facturacion.com        -> 522 desde Cloudflare
+curl --resolve dominio:443:IP_ORIGEN https://dominio -> 302 /login
+```
+
+Diagnostico:
+
+- Docker, `nginx-proxy`, SSL y Laravel estan bien si el origen directo responde
+  `301`, `302` o `200`.
+- El `522` queda entre Cloudflare y la red del origen: FortiGate, firewall,
+  IPS/DoS/GeoIP, NAT o allowlist de IPs.
+- Si un tenant funcionaba y luego falla, revisar si el registro paso de
+  `Solo DNS` a proxy naranja.
+
+Pruebas:
+
+```bash
+# En el servidor
+curl -vkI --resolve ceos-facturacion.com:443:127.0.0.1 https://ceos-facturacion.com
+curl -vkI --resolve ceos-facturacion.com:80:127.0.0.1 http://ceos-facturacion.com
+```
+
+```powershell
+# Desde fuera de la red
+curl.exe -vkI --resolve ceos-facturacion.com:443:143.0.248.236 https://ceos-facturacion.com
+curl.exe -vI  --resolve ceos-facturacion.com:80:143.0.248.236 http://ceos-facturacion.com
+curl.exe -vkI https://ceos-facturacion.com
+```
+
+Interpretacion:
+
+| Resultado | Causa probable |
+|---|---|
+| Directo a `IP_ORIGEN` responde, Cloudflare da `522` | Firewall/NAT bloquea Cloudflare o perfiles de seguridad cortan ese trafico. |
+| Local `127.0.0.1:443` falla | Problema de proxy/certificados en Docker; ejecutar `updateSSL.sh DOMINIO --repair-proxy`. |
+| Directo a `IP_ORIGEN` falla | NAT/VIP/puertos publicos no llegan al servidor. |
+
+Solucion rapida:
+
+1. Poner `ceos-facturacion.com`, `*.ceos-facturacion.com` y
+   `www.ceos-facturacion.com` en `Solo DNS`.
+2. Si se necesita proxy naranja, permitir los rangos oficiales de Cloudflare
+   hacia `80/443` en FortiGate/firewall y revisar IPS/DoS/GeoIP.
+
+### `400 Bad Request: plain HTTP request was sent to HTTPS port`
+
+Sintoma al abrir en navegador:
+
+```text
+143.0.248.236:443 -> 400 Bad Request
+The plain HTTP request was sent to HTTPS port
+```
+
+Causa: se escribio `143.0.248.236:443` sin `https://`; el navegador mando HTTP
+normal al puerto TLS. No es fallo del proxy.
+
+Prueba correcta:
+
+```text
+https://143.0.248.236
+```
+
+Para Pro-8, la prueba real debe preservar `Host`/SNI:
+
+```bash
+curl -vkI --resolve ceos-facturacion.com:443:143.0.248.236 https://ceos-facturacion.com
+```
+
+### `www.<dominio>` devuelve 404 o cae como tenant
+
+`www` no debe crearse como tenant. Debe ser alias del panel central y redirigir
+al dominio base. Ejecutar:
+
+```bash
+cd /var
+sudo ./updateSSL.sh ceos-facturacion.com --repair-proxy
+```
+
+Validacion:
+
+```bash
+curl -vkI --resolve www.ceos-facturacion.com:443:127.0.0.1 https://www.ceos-facturacion.com/login
+```
+
+Debe responder `301` hacia `https://ceos-facturacion.com/login`.
+
+### Laravel 500 despues de reparar proxy
+
+Una vez que el proxy funciona, puede aparecer `500` de Laravel. Revisar FPM y
+logs:
+
+```bash
+cd /var/ceos-facturacion.com
+docker compose logs --tail=120 fpm_1
+docker compose exec -T fpm_1 sh -c "tail -120 /var/www/html/storage/logs/laravel.log"
+```
+
+Errores vistos y solucion:
+
+| Error | Causa | Solucion |
+|---|---|---|
+| `Class "Illuminate\Foundation\Application" not found` | Falta `vendor/` o Composer no termino. | Ejecutar `composer install` dentro de `fpm_1`. |
+| `Class "Barryvdh\Debugbar\ServiceProvider" not found` | Se instalo con `--no-dev`, pero la app intenta cargar Debugbar. | Instalar sin `--no-dev` o quitar el provider de Debugbar del proyecto. |
+| `Please provide a valid cache path` | Faltan carpetas de `storage/framework` o permisos. | Crear carpetas y permisos de Laravel. |
+
+Comandos de recuperacion:
+
+```bash
+cd /var/ceos-facturacion.com
+
+docker compose exec -T -u root fpm_1 sh -c "
+mkdir -p storage/logs storage/framework/views storage/framework/cache/data storage/framework/sessions bootstrap/cache
+touch storage/logs/laravel.log
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+"
+
+docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer install --optimize-autoloader"
+docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer dump-autoload -o"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan package:discover"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan cache:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan route:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan view:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:cache"
+docker compose restart fpm_1 supervisor_1 scheduling_1
+```
+
 ## InstalaciÃƒÂ³n local / desarrollo
 
 Equivalente Linux nativo del `02-install-dev.sh` de Windows Server. Monta el stack con `scripts/local-setup.sh` del propio proyecto: 7 containers, sin proxy ni SSL.

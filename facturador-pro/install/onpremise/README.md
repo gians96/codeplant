@@ -659,6 +659,140 @@ docker volume ls | grep fe_dominio
 
 ## 15. Troubleshooting
 
+### Cloudflare 522, pero el origen directo responde
+
+Sintoma:
+
+```text
+https://ceos-facturacion.com                  -> 522 desde Cloudflare
+https://demo.ceos-facturacion.com/login       -> a veces carga si esta en Solo DNS
+curl --resolve dominio:443:IP_PUBLICA https://dominio -> 302 /login
+```
+
+**Diagnostico:** si el acceso directo al origen responde `301`, `302` o `200`,
+Docker, `nginx-proxy`, SSL y Laravel ya estan atendiendo. El `522` queda entre
+Cloudflare y el servidor de origen: FortiGate/VIP/NAT, firewall, IPS/DoS/GeoIP
+o reglas que no permiten las IPs de Cloudflare.
+
+Pruebas recomendadas:
+
+```bash
+# En el servidor: valida Docker/proxy sin salir a internet
+curl -vkI --resolve ceos-facturacion.com:443:127.0.0.1 https://ceos-facturacion.com
+curl -vkI --resolve ceos-facturacion.com:80:127.0.0.1 http://ceos-facturacion.com
+```
+
+```powershell
+# Desde una red externa: valida NAT/VIP directo al origen
+curl.exe -vkI --resolve ceos-facturacion.com:443:143.0.248.236 https://ceos-facturacion.com
+curl.exe -vI  --resolve ceos-facturacion.com:80:143.0.248.236 http://ceos-facturacion.com
+
+# Sin --resolve: valida el camino real por Cloudflare si el proxy naranja esta activo
+curl.exe -vkI https://ceos-facturacion.com
+```
+
+Interpretacion:
+
+| Resultado | Lectura |
+|-----------|---------|
+| Local `127.0.0.1:443` responde | El proxy Docker y el certificado estan OK. |
+| Directo a `IP_PUBLICA:443` responde | FortiGate/NAT hacia el servidor esta OK para clientes normales. |
+| Directo responde, pero Cloudflare da `522` | Cloudflare no logra conectar al origen: revisar firewall/IPS/DoS/GeoIP/allowlist. |
+| `demo.<dominio>` carga y el apex no | Un registro puede estar en `Solo DNS` y el otro con proxy naranja. Unificar el modo. |
+
+Solucion rapida mientras se revisa la red: poner `ceos-facturacion.com`,
+`*.ceos-facturacion.com` y `www.ceos-facturacion.com` en `Solo DNS`. Si se
+necesita proxy naranja, permitir el trafico de Cloudflare hacia puertos `80` y
+`443` en FortiGate/firewall y revisar perfiles IPS/DoS/GeoIP.
+
+### `400 Bad Request: plain HTTP request was sent to HTTPS port`
+
+Sintoma al abrir en navegador:
+
+```text
+143.0.248.236:443 -> 400 Bad Request
+The plain HTTP request was sent to HTTPS port
+```
+
+Causa: se escribio la IP con puerto, pero sin `https://`. El navegador envio
+HTTP normal al puerto TLS. No es fallo del proxy ni del certificado.
+
+Prueba correcta:
+
+```text
+https://143.0.248.236
+```
+
+Para Pro-8, la prueba util debe preservar `Host` y SNI:
+
+```bash
+curl -vkI --resolve ceos-facturacion.com:443:143.0.248.236 https://ceos-facturacion.com
+```
+
+### `www.<dominio>` devuelve 404 o cae como tenant
+
+`www` no debe crearse como tenant. Debe ser alias del panel central y redirigir
+al dominio base. Ejecutar:
+
+```bash
+cd /opt/proyectos
+sudo ./ssl.sh --domain ceos-facturacion.com --repair-proxy
+```
+
+Validacion:
+
+```bash
+curl -vkI --resolve www.ceos-facturacion.com:443:127.0.0.1 https://www.ceos-facturacion.com/login
+```
+
+Debe responder `301` hacia `https://ceos-facturacion.com/login`.
+
+### Laravel 500 despues de corregir Cloudflare/proxy
+
+Cuando el proxy ya funciona, el navegador puede mostrar la pagina `500` propia
+de Laravel. En ese punto el problema ya no es Cloudflare: hay que revisar FPM,
+Composer, `storage/` y las caches de Laravel.
+
+Logs:
+
+```bash
+cd /opt/proyectos/ceos-facturacion.com/app
+docker compose logs --tail=120 fpm_1
+docker compose exec -T fpm_1 sh -c "tail -120 /var/www/html/storage/logs/laravel.log"
+```
+
+Errores vistos:
+
+| Error | Causa probable | Solucion |
+|-------|----------------|----------|
+| `Class "Illuminate\Foundation\Application" not found` | Falta `vendor/` o Composer no termino. | Ejecutar `composer install` dentro de `fpm_1`. |
+| `Class "Barryvdh\Debugbar\ServiceProvider" not found` | Se instalo con `--no-dev`, pero la app intenta cargar Debugbar. | Instalar sin `--no-dev` o quitar ese provider/config del proyecto. |
+| `Please provide a valid cache path` | Faltan carpetas de `storage/framework` o permisos. | Crear carpetas y permisos de Laravel. |
+| `tail: cannot open ... laravel.log` | No existe `storage/logs/laravel.log`. | Crear archivo y permisos antes de volver a probar. |
+
+Recuperacion base:
+
+```bash
+cd /opt/proyectos/ceos-facturacion.com/app
+
+docker compose exec -T -u root fpm_1 sh -c "
+mkdir -p storage/logs storage/framework/views storage/framework/cache/data storage/framework/sessions bootstrap/cache
+touch storage/logs/laravel.log
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+"
+
+docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer install --optimize-autoloader"
+docker compose exec -T fpm_1 sh -c "cd /var/www/html && composer dump-autoload -o"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan package:discover"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan cache:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan route:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan view:clear"
+docker compose exec -T fpm_1 sh -c "CACHE_DRIVER=file php artisan config:cache"
+docker compose restart fpm_1 supervisor_1 scheduling_1
+```
+
 ### `Access denied for user 'root'` al REINSTALAR un dominio
 
 Sintoma (durante `migrate:refresh --seed`):
