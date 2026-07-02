@@ -239,17 +239,19 @@ Verificar con `docker volume ls`.
 
 ### 7.1 Descargar scripts en el servidor
 
+Copiar/pegar para una instalacion nueva o para actualizar los scripts en un
+servidor existente:
+
 ```bash
 mkdir -p /opt/proyectos && cd /opt/proyectos
 
-# Scripts de instalacion y operacion
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/install.sh
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/update.sh
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/ssl.sh
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/uninstall.sh
-curl -O https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/set-hosts.sh
+BASE_URL="https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise"
 
-chmod +x *.sh
+for file in install.sh update.sh ssl.sh uninstall.sh set-hosts.sh set-hosts.ps1 README.md ARQUITECTURA-Y-CONTEXTO.md configurar-pcs-host.md; do
+    curl -fSL -o "$file" "$BASE_URL/$file"
+done
+
+chmod +x install.sh update.sh ssl.sh uninstall.sh set-hosts.sh
 ```
 
 ### 7.2 Ejecutar instalacion
@@ -405,12 +407,31 @@ Un solo script para todo el ciclo SSL. **Detecta automaticamente** el modo:
 - Sin certificado previo → **EMITE** el wildcard y activa HTTPS en el `.env`
   (`FORCE_HTTPS=true`, pusher a 443/https).
 - Con certificado previo → **RENUEVA** (`--force-renewal`).
+- Con `--repair-proxy` → **repara HTTPS/proxy sin renovar certificado**.
 
 ```bash
 cd /opt/proyectos
 sudo ./ssl.sh
 # Elige el dominio del menu, o directo:
 sudo ./ssl.sh --domain fe.dominio.org --email admin@dominio.org
+```
+
+Para reparar un dominio que ya tiene certificado, pero Cloudflare muestra
+`522` o el origen no responde por `443`, descargar primero el `ssl.sh` nuevo y
+ejecutar:
+
+```bash
+cd /opt/proyectos
+curl -fSL -o ssl.sh https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/onpremise/ssl.sh
+chmod +x ssl.sh
+
+sudo ./ssl.sh --domain ceos-facturacion.com --repair-proxy
+```
+
+El script debe imprimir headers para las pruebas locales:
+
+```bash
+curl -vkI --connect-timeout 5 --resolve ceos-facturacion.com:443:127.0.0.1 https://ceos-facturacion.com
 ```
 
 ### 10.1 NO requiere IP publica ni FortiGate
