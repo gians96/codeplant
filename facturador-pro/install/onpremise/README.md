@@ -434,6 +434,15 @@ El script debe imprimir headers para las pruebas locales:
 curl -vkI --connect-timeout 5 --resolve ceos-facturacion.com:443:127.0.0.1 https://ceos-facturacion.com
 ```
 
+Si `demo.ceos-facturacion.com` carga pero `ceos-facturacion.com` devuelve
+`522` en Cloudflare, revisa que ambos registros DNS esten en el mismo modo:
+`Solo DNS` o ambos con proxy naranja. Si el apex esta con proxy naranja y el
+wildcard esta `Solo DNS`, los tenants pueden entrar directo al origen mientras
+el panel central pasa por Cloudflare y falla por reglas WAN/Firewall.
+
+`www.ceos-facturacion.com` no debe crearse como tenant: el repair agrega
+`www.<dominio>` al proxy y lo redirige al dominio base del panel central.
+
 ### 10.1 NO requiere IP publica ni FortiGate
 
 El reto **DNS-01** valida creando un TXT en el DNS **publico** del registrador;

@@ -206,6 +206,11 @@ server {
     server_name *._;
     charset utf-8;
     server_tokens off;
+    set \$redirect_scheme \$http_x_forwarded_proto;
+    if (\$redirect_scheme = "") { set \$redirect_scheme \$scheme; }
+    if (\$host = "www.$HOST") {
+        return 301 \$redirect_scheme://$HOST\$request_uri;
+    }
     location = /favicon.ico {
         log_not_found off;
         access_log off;
@@ -259,7 +264,10 @@ services:
         container_name: nginx_$DIR_MODIFIED
         working_dir: /var/www/html
         environment:
-            VIRTUAL_HOST: $HOST, *.$HOST
+            VIRTUAL_HOST: $HOST, www.$HOST, *.$HOST
+            VIRTUAL_PORT: "80"
+            VIRTUAL_PROTO: "http"
+            CERT_NAME: "$HOST"
         volumes:
             - ./:/var/www/html
         restart: always

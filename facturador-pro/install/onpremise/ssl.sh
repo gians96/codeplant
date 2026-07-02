@@ -159,7 +159,7 @@ def read_env(key: str) -> str:
             return clean(match.group(1))
     return ""
 
-hosts = [domain, f"*.{domain}"]
+hosts = [domain, f"www.{domain}", f"*.{domain}"]
 for raw_host in read_env("VIRTUAL_HOST").split(","):
     host = raw_host.strip()
     if not host or host in hosts:
@@ -207,9 +207,53 @@ restart_project_nginx() {
     nginx_service="$(grep -E '^[[:space:]]+nginx_[0-9]+:' "$PROJECT_DIR/docker-compose.yml" | head -1 | sed -E 's/^[[:space:]]+([^:]+):.*/\1/')"
     [ -n "$nginx_service" ] || { echo "   ADVERTENCIA: no se encontro servicio nginx_N para recrear."; return 0; }
 
-    echo "-> Recreando $nginx_service para aplicar variables del proxy ..."
-    ( cd "$PROJECT_DIR" && docker compose up -d --no-deps "$nginx_service" ) || \
+    echo "-> Reconstruyendo/recreando $nginx_service para aplicar nginx/proxy ..."
+    ( cd "$PROJECT_DIR" && docker compose up -d --build --no-deps "$nginx_service" ) || \
         echo "   ADVERTENCIA: no se pudo recrear $nginx_service; revisa docker compose logs."
+}
+
+ensure_www_redirect() {
+    local nginx_file="$PROJECT_DIR/docker/nginx/default"
+    local result
+
+    [ -f "$nginx_file" ] || { echo "   ADVERTENCIA: no existe $nginx_file"; return 1; }
+    command -v python3 >/dev/null 2>&1 || { echo "   ADVERTENCIA: python3 no esta disponible; no se pudo reparar nginx/default"; return 1; }
+
+    echo "-> Verificando redirect www.$DOMAIN -> $DOMAIN ..."
+    result="$(python3 - "$nginx_file" "$DOMAIN" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+domain = sys.argv[2]
+text = path.read_text()
+block = f'''    set $redirect_scheme $http_x_forwarded_proto;
+    if ($redirect_scheme = "") {{ set $redirect_scheme $scheme; }}
+    if ($host = "www.{domain}") {{
+        return 301 $redirect_scheme://{domain}$request_uri;
+    }}
+'''
+
+if f'www.{domain}' in text and f'{domain}$request_uri' in text:
+    print("   OK redirect www ya existe en nginx/default.")
+    print("CHANGED=0")
+    sys.exit(0)
+
+marker = "    server_tokens off;\n"
+if marker not in text:
+    print("   ADVERTENCIA: no se encontro marcador server_tokens off; en nginx/default.")
+    print("CHANGED=0")
+    sys.exit(0)
+
+text = text.replace(marker, marker + block, 1)
+path.write_text(text)
+print("   OK nginx/default actualizado con redirect www.")
+print("CHANGED=1")
+PY
+)" || { echo "   ADVERTENCIA: no se pudo reparar nginx/default"; return 1; }
+
+    echo "$result" | sed '/^CHANGED=/d'
+    echo "$result" | grep -q '^CHANGED=1$'
 }
 
 validate_local_proxy() {
@@ -373,6 +417,8 @@ fi
 
 COMPOSE_PROXY_CHANGED="0"
 ensure_proxy_env && COMPOSE_PROXY_CHANGED="1"
+NGINX_CONFIG_CHANGED="0"
+ensure_www_redirect && NGINX_CONFIG_CHANGED="1"
 
 echo "-> Cambiando .env a HTTPS ..."
 sed -i '/^APP_URL=/c\APP_URL=https://${APP_URL_BASE}' "$ENV_FILE"
@@ -396,7 +442,9 @@ echo "-> Reiniciando PHP y workers (fpm_$N, scheduling_$N, supervisor_$N) ..."
 ( cd "$PROJECT_DIR" && docker compose restart "fpm_$N" "scheduling_$N" "supervisor_$N" ) || \
     echo "   ADVERTENCIA: reinicia manualmente: docker compose restart fpm_$N scheduling_$N supervisor_$N"
 
-[ "$COMPOSE_PROXY_CHANGED" = "1" ] && restart_project_nginx
+if [ "$COMPOSE_PROXY_CHANGED" = "1" ] || [ "$NGINX_CONFIG_CHANGED" = "1" ]; then
+    restart_project_nginx
+fi
 
 echo "-> Reiniciando proxy ..."
 [ -z "$PROXY" ] && PROXY="$(find_proxy)"
