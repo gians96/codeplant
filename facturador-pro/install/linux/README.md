@@ -8,7 +8,7 @@ Scripts para instalar y mantener Pro-8 sobre Docker en hosts Linux nativos.
 |---------|-----------|
 | `install.sh` | InstalaciÃƒÂ³n **producciÃƒÂ³n** (proxy + tenant + MySQL + Redis + SSL) |
 | `install-local.sh` | InstalaciÃƒÂ³n **local / desarrollo** (sin proxy, sin SSL) Ã¢â€ Â nuevo |
-| `updateSSL.sh` | RenovaciÃƒÂ³n de certificados SSL |
+| `updateSSL.sh` | RenovaciÃƒÂ³n de certificados SSL y reparacion de proxy HTTPS |
 | `update.sh` | Actualizar cÃƒÂ³digo del proyecto tras `git pull` |
 
 ## InstalaciÃƒÂ³n producciÃƒÂ³n
@@ -22,6 +22,33 @@ sudo ./install.sh
 El script pide dominio, nÃƒÂºmero de servicio y puerto MySQL.
 
 La instalaciÃƒÂ³n de producciÃƒÂ³n incluye Soketi para Laravel Broadcasting. Pro-8 publica internamente a `soketi_DOMINIO:6001` y VendeMaster se conecta por el mismo dominio HTTPS (`wss://DOMINIO/app/...`), sin abrir un puerto WebSocket adicional.
+
+## Reparar SSL/proxy sin reinstalar
+
+Si el servidor responde localmente pero Cloudflare muestra `522`, o si `www`
+esta cayendo como tenant en vez de panel administrativo, actualiza y ejecuta:
+
+```bash
+cd /opt/proyectos                  # o la raiz donde esta nt-suite.pro/
+sudo curl -fSL -o updateSSL.sh https://raw.githubusercontent.com/gians96/codeplant/master/facturador-pro/install/linux/updateSSL.sh
+sudo chmod +x updateSSL.sh
+
+sudo ./updateSSL.sh nt-suite.pro --repair-proxy
+```
+
+El script no borra volumenes ni toca base de datos. Solo:
+
+1. Copia el certificado al volumen real de `nginx-proxy`.
+2. Repara `VIRTUAL_HOST`, `VIRTUAL_PORT`, `VIRTUAL_PROTO` y `CERT_NAME`.
+3. Agrega `www.<dominio>` como alias y redirect al dominio base.
+4. Reconstruye solo `nginx_N`.
+5. Reinicia el proxy y valida `http://` / `https://` contra `127.0.0.1`.
+
+Para renovar certificado y reparar proxy en el mismo flujo:
+
+```bash
+sudo ./updateSSL.sh nt-suite.pro
+```
 
 ## InstalaciÃƒÂ³n local / desarrollo
 
