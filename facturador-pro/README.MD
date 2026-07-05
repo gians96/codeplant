@@ -21,6 +21,7 @@ facturador-pro/
 Guía útil si vuelve a fallar el tenant local:
 
 - [`demo.localhost` devuelve HTTP 500 por `tenancy_demo`](troubleshooting/demo-localhost-tenancy-demo-access-denied.md)
+- [Reportes quedan en `IN_PROCESS` en bandeja de descargas](troubleshooting/reportes-download-tray-in-process-supervisor.md)
 
 ---
 

@@ -10,6 +10,7 @@
 
 - [`demo.localhost` devuelve HTTP 500 por `tenancy_demo`](troubleshooting/demo-localhost-tenancy-demo-access-denied.md)
 - [`ceos-facturacion.com`: Cloudflare 522, FortiGate, SSL/proxy y Laravel 500](troubleshooting/ceos-facturacion-cloudflare-fortigate-laravel-500.md)
+- [Reportes quedan en `IN_PROCESS` en bandeja de descargas](troubleshooting/reportes-download-tray-in-process-supervisor.md)
 
 ---
 
