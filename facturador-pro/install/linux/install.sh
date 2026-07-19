@@ -28,6 +28,49 @@ list_occupied_ports() {
     echo "==========================================="
 }
 
+# =========================================================================
+# Preflight: verificar/instalar TODO lo necesario antes de preguntar nada
+# (mismo criterio que onpremise/install.sh)
+# =========================================================================
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: ejecuta como root:  sudo bash install.sh"
+    exit 1
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "   Docker no esta instalado. Instalando Docker Engine ..."
+    apt-get -y update
+    apt-get -y install apt-transport-https ca-certificates curl gnupg-agent software-properties-common gnupg lsb-release git-core
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+    apt-get -y update
+    apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl enable --now docker
+fi
+
+if ! docker info >/dev/null 2>&1; then
+    echo "ERROR: Docker esta instalado pero el daemon no responde."
+    echo "  Inicialo:  sudo systemctl start docker   (revisa: systemctl status docker)"
+    exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+    echo "   Plugin 'docker compose' ausente. Instalando docker-compose-plugin ..."
+    apt-get -y update && apt-get -y install docker-compose-plugin || {
+        echo "ERROR: no se pudo instalar el plugin 'docker compose'."; exit 1; }
+fi
+
+command -v git     >/dev/null 2>&1 || { echo "   Instalando git ...";       apt-get -y install git-core 2>/dev/null || apt-get -y install git; }
+command -v curl    >/dev/null 2>&1 || { echo "   Instalando curl ...";      apt-get -y install curl; }
+command -v python3 >/dev/null 2>&1 || { echo "   Instalando python3 ...";   apt-get -y install python3; }
+command -v gzip    >/dev/null 2>&1 || { echo "   Instalando gzip ...";      apt-get -y install gzip; }
+# net-tools: find_free_mysql_port usa netstat (Ubuntu 24.04 ya no lo trae)
+command -v netstat >/dev/null 2>&1 || { echo "   Instalando net-tools ..."; apt-get -y install net-tools; }
+command -v certbot >/dev/null 2>&1 || apt-get -y install certbot 2>/dev/null || true
+
+echo "   OK Docker $(docker --version | awk '{print $3}' | tr -d ',') + compose $(docker compose version --short 2>/dev/null)"
+
 #PREGUNTAR AL USUARIO SOBRE HOST
 read -p "Coloca tu dominio: " HOST
 

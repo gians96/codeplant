@@ -10,7 +10,7 @@
 # Uso (desde la carpeta raiz donde instalaste, ej. /opt/proyectos):
 #   sudo ./update.sh
 #   sudo ./update.sh --root /opt/proyectos
-#   sudo ./update.sh --domain fe.consurtrading.org --branch master
+#   sudo ./update.sh --domain fe.consurtrading.org --branch gians96
 # =========================================================================
 
 set -e
@@ -68,7 +68,7 @@ fi
 
 # --- Rama ----------------------------------------------------------
 if [ -z "$BRANCH" ]; then
-    CUR_BRANCH="$(cd "$PROJECT_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
+    CUR_BRANCH="$(cd "$PROJECT_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo gians96)"
     read -p "Rama a actualizar [$CUR_BRANCH]: " in_branch
     BRANCH="${in_branch:-$CUR_BRANCH}"
 fi

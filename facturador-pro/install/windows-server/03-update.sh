@@ -401,7 +401,15 @@ docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file php art
 
 echo "-> 5/8 migraciones"
 docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan migrate --force"
-docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan tenancy:migrate --force" || true
+# --path OBLIGATORIO: config/tenancy.php tiene tenant-migrations-path=false y sin el
+# hyn lanza InvalidArgumentException y NO migra ningun tenant (incidente 2026-07-13).
+docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan tenancy:migrate --path=database/migrations/tenant --force" || {
+    echo "=========================================================="
+    echo "ADVERTENCIA: tenancy:migrate FALLO. Los tenants pueden haber"
+    echo "quedado a medio migrar. Revisar el error de arriba ANTES de"
+    echo "dar el update por bueno (el backup pre-update es el rollback)."
+    echo "=========================================================="
+}
 
 echo "-> 6/8 clear caches"
 for cmd in route:clear config:clear cache:clear view:clear; do

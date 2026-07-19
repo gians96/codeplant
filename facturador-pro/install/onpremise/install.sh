@@ -35,7 +35,7 @@
 set -e
 
 REPO_URL="${REPO_URL:-https://gitlab.com/gians96/pro-8.git}"
-DEFAULT_BRANCH="${DEFAULT_BRANCH:-master}"
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-gians96}"
 
 # La raiz es DONDE VIVEN LOS SCRIPTS (no el directorio actual): evita el doble
 # anidamiento <dominio>/<dominio> si se ejecuta desde otra carpeta. Override: --root
@@ -122,6 +122,10 @@ preflight() {
     # git / curl
     command -v git  >/dev/null 2>&1 || { echo "   Instalando git ...";  apt-get -y install git-core 2>/dev/null || apt-get -y install git; }
     command -v curl >/dev/null 2>&1 || { echo "   Instalando curl ..."; apt-get -y install curl; }
+
+    # python3 / gzip: los usan scripts/onprem-setup.sh (seeder) y el backup del update
+    command -v python3 >/dev/null 2>&1 || { echo "   Instalando python3 ..."; apt-get -y install python3; }
+    command -v gzip    >/dev/null 2>&1 || { echo "   Instalando gzip ...";    apt-get -y install gzip; }
 
     # certbot (opcional, Fase 2 SSL)
     command -v certbot >/dev/null 2>&1 || apt-get -y install certbot 2>/dev/null || true
