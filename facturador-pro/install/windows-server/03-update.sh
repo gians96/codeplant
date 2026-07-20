@@ -396,6 +396,12 @@ bun run build || echo "  ADVERTENCIA: bun run build fallo; revisa errores arriba
 echo "-> 3/8 composer dump-autoload (CLAVE para clases nuevas)"
 docker compose exec -T $FPM sh -c "cd /var/www/html && composer dump-autoload -o"
 
+# mPDF/dompdf escriben cache y fuentes DENTRO de vendor; tras composer (como root)
+# quedan root:root y fpm (www-data) no puede escribir -> "mkdir(): Permission denied"
+# al generar PDF (incidente 2026-07-20). Se les da owner www-data.
+echo "-> permisos de escritura de mpdf/dompdf"
+docker compose exec -T -u root $FPM sh -c "mkdir -p /var/www/html/vendor/mpdf/mpdf/tmp /var/www/html/vendor/mpdf/mpdf/ttfontdata; chown -R www-data:www-data /var/www/html/vendor/mpdf/mpdf/tmp /var/www/html/vendor/mpdf/mpdf/ttfontdata /var/www/html/vendor/dompdf/dompdf/lib/fonts 2>/dev/null; chmod -R ug+rwX /var/www/html/vendor/mpdf/mpdf/tmp /var/www/html/vendor/mpdf/mpdf/ttfontdata /var/www/html/vendor/dompdf/dompdf/lib/fonts 2>/dev/null; true"
+
 echo "-> 4/8 php artisan module:discover"
 docker compose exec -T $FPM sh -c "cd /var/www/html && CACHE_DRIVER=file php artisan module:discover" || true
 
